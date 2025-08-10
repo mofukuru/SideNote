@@ -1,0 +1,75 @@
+.image-container {
+    position: relative;
+    display: inline-block; /* 画像のサイズに合わせてコンテナを調整 */
+}
+
+.selection-box {
+    position: absolute;
+    border: 2px dashed blue;
+    background-color: rgba(0, 0, 255, 0.2);
+    pointer-events: none; /* 選択ボックスがマウスイベントをブロックしないようにする */
+}
+
+/* Comment View Styles */
+.comment-item {
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    padding: var(--size-4-2);
+    margin-bottom: var(--size-4-2);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.comment-item:hover {
+    background-color: var(--background-secondary-alt);
+}
+
+.comment-item h4.selected-text-display {
+    color: var(--text-accent);
+    font-size: var(--font-text-size);
+    margin-bottom: var(--size-2-1);
+    font-weight: 600;
+}
+
+.comment-item p.comment-content {
+    font-size: var(--font-text-size);
+    margin-bottom: var(--size-2-1);
+    white-space: pre-wrap; /* テキストを折り返す */
+    word-wrap: break-word; /* 長い単語も折り返す */
+}
+
+.comment-item small.timestamp-display {
+    color: var(--text-muted);
+    font-size: var(--font-smaller);
+    display: block;
+    margin-bottom: var(--size-2-1);
+}
+
+.comment-item button {
+    margin-right: var(--size-2-1);
+    padding: var(--size-2-1) var(--size-4-2);
+    border-radius: var(--radius-s);
+    border: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.comment-item button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.comment-item button.delete-comment-button {
+    color: var(--text-error);
+}
+
+.comment-item button.delete-comment-button:hover {
+    background-color: var(--background-modifier-error-hover);
+}
+
+.sidenote-comment-view {
+    height: 100%;
+    overflow-y: auto;
+}
