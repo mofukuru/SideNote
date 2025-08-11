@@ -1,5 +1,3 @@
-import { App } from "obsidian";
-
 export interface Comment {
     filePath: string;
     startLine: number;

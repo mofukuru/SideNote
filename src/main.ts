@@ -1,28 +1,28 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, TFile, App, MarkdownView, Notice, ViewStateResult, Plugin, Modal, Setting, PluginSettingTab } from "obsidian";
+import { ItemView, WorkspaceLeaf, TFile, App, MarkdownView, Notice, ViewStateResult, Plugin, Modal, Setting, PluginSettingTab } from "obsidian";
 import { Comment, CommentManager } from "./commentManager";
 
 interface CustomViewState extends Record<string, unknown> {
     filePath: string | null;
 }
 
-interface MyPluginSettings {
+interface SideNoteSettings {
     commentSortOrder: "timestamp" | "position";
 }
 
 // Define a new interface for the entire plugin data
-interface PluginData extends MyPluginSettings {
+interface PluginData extends SideNoteSettings {
     comments: Comment[];
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: SideNoteSettings = {
     commentSortOrder: "position",
 };
 
 class CustomView extends ItemView {
     private file: TFile | null = null;
-    private plugin: MyPlugin;
+    private plugin: SideNote;
 
-    constructor(leaf: WorkspaceLeaf, plugin: MyPlugin, file: TFile | null = null) {
+    constructor(leaf: WorkspaceLeaf, plugin: SideNote, file: TFile | null = null) {
         super(leaf);
         this.plugin = plugin;
         this.file = file;
@@ -42,8 +42,11 @@ class CustomView extends ItemView {
 
     async setState(state: CustomViewState, result: ViewStateResult): Promise<void> {
         if (state.filePath) {
-            this.file = this.app.vault.getAbstractFileByPath(state.filePath) as TFile;
-            this.renderComments(); // ファイルが変更されたらコメントを再レンダリング
+            const file = this.app.vault.getAbstractFileByPath(state.filePath);
+            if (file instanceof TFile) {
+                this.file = file;
+                this.renderComments(); // ファイルが変更されたらコメントを再レンダリング
+            }
         }
         await super.setState(state, result);
     }
@@ -91,9 +94,12 @@ class CustomView extends ItemView {
 
                         // If no existing view, open a new one.
                         if (!targetLeaf) {
-                            const newLeaf = this.app.workspace.getLeaf(true);
-                            await newLeaf.openFile(this.app.vault.getAbstractFileByPath(comment.filePath) as TFile);
-                            targetLeaf = newLeaf;
+                            const file = this.app.vault.getAbstractFileByPath(comment.filePath);
+                            if (file instanceof TFile) {
+                                const newLeaf = this.app.workspace.getLeaf(true);
+                                await newLeaf.openFile(file);
+                                targetLeaf = newLeaf;
+                            }
                         }
 
                         if (targetLeaf && targetLeaf.view instanceof MarkdownView) {
@@ -153,7 +159,6 @@ class CustomView extends ItemView {
     }
 
     onunload() {
-        this.app.workspace.detachLeavesOfType("custom-view");
     }
 }
 
@@ -230,10 +235,10 @@ class CommentModal extends Modal {
     }
 }
 
-class MyPluginSettingTab extends PluginSettingTab {
-    plugin: MyPlugin;
+class SideNoteSettingTab extends PluginSettingTab {
+    plugin: SideNote;
 
-    constructor(app: App, plugin: MyPlugin) {
+    constructor(app: App, plugin: SideNote) {
         super(app, plugin);
     }
 
@@ -266,16 +271,16 @@ class MyPluginSettingTab extends PluginSettingTab {
 }
 
 // プラグインのアクティベーション処理
-export default class MyPlugin extends Plugin {
+export default class SideNote extends Plugin {
     commentManager: CommentManager;
-    settings: MyPluginSettings;
+    settings: SideNoteSettings;
     comments: Comment[] = [];
 
     async onload() {
         await this.loadPluginData(); // Load all data
         this.commentManager = new CommentManager(this.comments);
 
-        this.addSettingTab(new MyPluginSettingTab(this.app, this));
+        this.addSettingTab(new SideNoteSettingTab(this.app, this));
 
         this.registerView("custom-view", (leaf) => new CustomView(leaf, this));
 
