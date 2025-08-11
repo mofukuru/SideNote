@@ -7,7 +7,6 @@ interface CustomViewState extends Record<string, unknown> {
 
 interface MyPluginSettings {
     commentSortOrder: "timestamp" | "position";
-    enableScrollTracking: boolean;
 }
 
 // Define a new interface for the entire plugin data
@@ -16,8 +15,7 @@ interface PluginData extends MyPluginSettings {
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-    commentSortOrder: "timestamp",
-    enableScrollTracking: false,
+    commentSortOrder: "position",
 };
 
 class CustomView extends ItemView {
@@ -52,7 +50,7 @@ class CustomView extends ItemView {
 
     public renderComments() { // Made public for settings tab to re-render
         this.containerEl.empty();
-        this.containerEl.addClass("sidenote-comment-view");
+        this.containerEl.addClass("sidenote-view-container");
         if (this.file) {
             let commentsForFile = this.plugin.commentManager.getCommentsForFile(this.file.path);
 
@@ -69,11 +67,16 @@ class CustomView extends ItemView {
             }
 
             if (commentsForFile.length > 0) {
+                const commentsContainer = this.containerEl.createDiv("sidenote-comments-container");
                 commentsForFile.forEach((comment) => {
-                    const commentEl = this.containerEl.createDiv("comment-item");
-                    commentEl.createEl("h4", { text: `Selected: ${comment.selectedText}`, cls: "selected-text-display" });
-                    commentEl.createEl("small", { text: new Date(comment.timestamp).toLocaleString(), cls: "timestamp-display" });
-                    commentEl.createEl("p", { text: comment.comment, cls: "comment-content" });
+                    const commentEl = commentsContainer.createDiv("sidenote-comment-item");
+
+                    const headerEl = commentEl.createDiv("sidenote-comment-header");
+                    const textInfoEl = headerEl.createDiv("sidenote-comment-text-info");
+                    textInfoEl.createEl("h4", { text: comment.selectedText, cls: "sidenote-selected-text" });
+                    textInfoEl.createEl("small", { text: new Date(comment.timestamp).toLocaleString(), cls: "sidenote-timestamp" });
+
+                    const actionsEl = headerEl.createDiv("sidenote-comment-actions");
 
                     // クリックでエディタの該当箇所にジャンプ
                     commentEl.onclick = async () => {
@@ -103,13 +106,11 @@ class CustomView extends ItemView {
                                 { line: comment.endLine, ch: comment.endChar }
                             );
 
-                            // If scroll tracking is enabled, scroll to the selection
-                            if (this.plugin.settings.enableScrollTracking && this.plugin.settings.commentSortOrder === 'position') {
-                                editor.scrollIntoView({
-                                    from: { line: comment.startLine, ch: 0 },
-                                    to: { line: comment.endLine, ch: 0 }
-                                }, true);
-                            }
+                            // Scroll to the selection
+                            editor.scrollIntoView({
+                                from: { line: comment.startLine, ch: 0 },
+                                to: { line: comment.endLine, ch: 0 }
+                            }, true);
 
                             editor.focus();
                         } else {
@@ -117,24 +118,31 @@ class CustomView extends ItemView {
                         }
                     };
 
-                    const editButton = commentEl.createEl("button", { text: "Edit", cls: "edit-comment-button" });
-                    editButton.onclick = () => {
+                    commentEl.createEl("p", { text: comment.comment, cls: "sidenote-comment-content" });
+
+                    const editButton = actionsEl.createEl("button", { text: "Edit", cls: "sidenote-edit-button" });
+                    editButton.onclick = (e) => {
+                        e.stopPropagation(); // Prevent the comment item's click event
                         new CommentModal(this.app, (editedComment) => {
                             this.plugin.editComment(comment.timestamp, editedComment);
                         }, comment.comment).open();
                     };
 
-                    const deleteButton = commentEl.createEl("button", { text: "Delete", cls: "delete-comment-button" });
-                    deleteButton.onclick = () => {
+                    const deleteButton = actionsEl.createEl("button", { text: "Delete", cls: "sidenote-delete-button" });
+                    deleteButton.onclick = (e) => {
+                        e.stopPropagation(); // Prevent the comment item's click event
                         this.plugin.deleteComment(comment.timestamp);
                     };
-                    commentEl.createEl("hr");
                 });
             } else {
-                this.containerEl.createDiv().setText("No comments for this file.");
+                const emptyStateEl = this.containerEl.createDiv("sidenote-empty-state");
+                emptyStateEl.createEl("p", { text: "No comments for this file yet." });
+                emptyStateEl.createEl("p", { text: "Select text in your note and use the 'Add Comment to Selection' command to get started." });
             }
         } else {
-            this.containerEl.createDiv().setText("No file selected.");
+            const emptyStateEl = this.containerEl.createDiv("sidenote-empty-state");
+            emptyStateEl.createEl("p", { text: "No file selected." });
+            emptyStateEl.createEl("p", { text: "Open a file to see its comments." });
         }
     }
 
@@ -193,19 +201,27 @@ class CommentModal extends Modal {
 
     onOpen() {
         const { contentEl } = this;
+        contentEl.addClass("sidenote-comment-modal");
+
         contentEl.createEl("h2", { text: this.initialComment ? "Edit Comment" : "Add Comment" });
 
-        // contentEl.createEl("label", { text: "Comment:" });
-        const input = contentEl.createEl("textarea", { cls: "comment-input" });
-        input.rows = 5;
+        const inputContainer = contentEl.createDiv("sidenote-comment-input-container");
+        const input = inputContainer.createEl("textarea");
+        input.placeholder = "Enter your comment...";
         input.value = this.initialComment;
 
-        const button = contentEl.createEl("button", { text: this.initialComment ? "Save" : "Add" });
+        const footer = contentEl.createDiv("sidenote-modal-footer");
+        const button = footer.createEl("button", {
+            text: this.initialComment ? "Save" : "Add",
+            cls: "mod-cta"
+        });
         button.onclick = () => {
             this.comment = input.value;
             this.onSubmit(this.comment);
             this.close();
         };
+
+        input.focus();
     }
 
     onClose() {
@@ -246,16 +262,6 @@ class MyPluginSettingTab extends PluginSettingTab {
                         });
                     })
             );
-
-        new Setting(containerEl)
-            .setName('Enable scroll tracking')
-            .setDesc('Automatically scroll the Markdown editor to the corresponding position when a comment is selected (only for position sort order).')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.enableScrollTracking)
-                .onChange(async (value) => {
-                    this.plugin.settings.enableScrollTracking = value;
-                    await this.plugin.saveData();
-                }));
     }
 }
 
@@ -388,7 +394,6 @@ export default class MyPlugin extends Plugin {
         const loadedData: PluginData = Object.assign({}, { comments: [] }, await this.loadData());
         this.settings = {
             commentSortOrder: loadedData.commentSortOrder || DEFAULT_SETTINGS.commentSortOrder,
-            enableScrollTracking: loadedData.enableScrollTracking || DEFAULT_SETTINGS.enableScrollTracking,
         };
         this.comments = loadedData.comments || [];
     }
