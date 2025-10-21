@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS: SideNoteSettings = {
     commentSortOrder: "position",
 };
 
-class CustomView extends ItemView {
+class SideNoteView extends ItemView {
     private file: TFile | null = null;
     private plugin: SideNote;
 
@@ -29,11 +29,11 @@ class CustomView extends ItemView {
     }
 
     getViewType() {
-        return "custom-view";
+        return "sidenote-view";
     }
 
     getDisplayText() {
-        return "Custom View";
+        return "Sidenote view";
     }
 
     async onOpen() {
@@ -143,7 +143,7 @@ class CustomView extends ItemView {
             } else {
                 const emptyStateEl = this.containerEl.createDiv("sidenote-empty-state");
                 emptyStateEl.createEl("p", { text: "No comments for this file yet." });
-                emptyStateEl.createEl("p", { text: "Select text in your note and use the 'Add Comment to Selection' command to get started." });
+                emptyStateEl.createEl("p", { text: "Select text in your note and use the 'Add comment to selection' command to get started." });
             }
         } else {
             const emptyStateEl = this.containerEl.createDiv("sidenote-empty-state");
@@ -163,7 +163,7 @@ class CustomView extends ItemView {
 }
 
 // ビューを切り替える関数
-async function switchToCustomView(app: App) {
+async function switchToSideNoteView(app: App) {
     const activeFile = app.workspace.getActiveFile();
 
     if (!activeFile) {
@@ -183,7 +183,7 @@ async function switchToCustomView(app: App) {
 
     if (leaf) {
         await leaf.setViewState({
-            type: "custom-view",
+            type: "sidenote-view",
             state: { filePath: activeFile.path }, // CustomViewStateはfilePathを期待
             active: true, // 新しいビューをアクティブにする
         });
@@ -208,7 +208,7 @@ class CommentModal extends Modal {
         const { contentEl } = this;
         contentEl.addClass("sidenote-comment-modal");
 
-        contentEl.createEl("h2", { text: this.initialComment ? "Edit Comment" : "Add Comment" });
+        contentEl.createEl("h2", { text: this.initialComment ? "Edit comment" : "Add comment" });
 
         const inputContainer = contentEl.createDiv("sidenote-comment-input-container");
         const input = inputContainer.createEl("textarea");
@@ -246,22 +246,22 @@ class SideNoteSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl("h2", { text: "SideNote Settings" });
+
 
         new Setting(containerEl)
-            .setName("Comment Sort Order")
+            .setName("Comment sort order")
             .setDesc("Choose how comments are sorted in the custom view.")
             .addDropdown((dropdown) =>
                 dropdown
-                    .addOption("timestamp", "By Timestamp")
+                    .addOption("timestamp", "By timestamp")
                     .addOption("position", "By Position in File")
                     .setValue(this.plugin.settings.commentSortOrder)
                     .onChange(async (value: "timestamp" | "position") => {
                         this.plugin.settings.commentSortOrder = value;
                         await this.plugin.saveData(); // Save all plugin data
                         // Re-render the custom view if it's open to apply the new sort order
-                        this.app.workspace.getLeavesOfType("custom-view").forEach(leaf => {
-                            if (leaf.view instanceof CustomView) {
+                        this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
+                            if (leaf.view instanceof SideNoteView) {
                                 leaf.view.renderComments();
                             }
                         });
@@ -282,19 +282,19 @@ export default class SideNote extends Plugin {
 
         this.addSettingTab(new SideNoteSettingTab(this.app, this));
 
-        this.registerView("custom-view", (leaf) => new CustomView(leaf, this));
+        this.registerView("sidenote-view", (leaf) => new SideNoteView(leaf, this));
 
         this.addCommand({
-            id: "switch-to-custom-view",
-            name: "Switch to Custom View",
+            id: "open-comment-view",
+            name: "Open comment view",
             callback: () => {
-                switchToCustomView(this.app);
+                switchToSideNoteView(this.app);
             },
         });
 
         this.addCommand({
             id: "add-comment-to-selection",
-            name: "Add Comment to Selection",
+            name: "Add comment to selection",
             callback: () => {
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (activeView) {
@@ -333,7 +333,7 @@ export default class SideNote extends Plugin {
                 // テキストが選択されている場合のみメニュー項目を追加
                 if (editor.somethingSelected()) {
                     menu.addItem((item) => {
-                        item.setTitle("Add Comment to Selection")
+                        item.setTitle("Add comment to selection")
                             .setIcon("message-square") // アイコンはLucide Iconsから選べます
                             .onClick(() => {
                                 const selection = editor.getSelection();
@@ -365,15 +365,15 @@ export default class SideNote extends Plugin {
         );
 
         // リボンアイコンを追加
-        this.addRibbonIcon("message-square", "Open Comment View", () => {
-            switchToCustomView(this.app);
+        this.addRibbonIcon("message-square", "Open comment view", () => {
+            switchToSideNoteView(this.app);
         });
     }
 
     async onCommentsChanged(message: string) {
         await this.saveData();
-        this.app.workspace.getLeavesOfType("custom-view").forEach(leaf => {
-            if (leaf.view instanceof CustomView) {
+        this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
+            if (leaf.view instanceof SideNoteView) {
                 leaf.view.renderComments();
             }
         });
