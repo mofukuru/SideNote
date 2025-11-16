@@ -144,7 +144,7 @@ class SideNoteView extends ItemView {
             } else {
                 const emptyStateEl = this.containerEl.createDiv("sidenote-empty-state");
                 emptyStateEl.createEl("p", { text: "No comments for this file yet." });
-                emptyStateEl.createEl("p", { text: "Select text in your note and use the 'Add comment to selection' command to get started." });
+                emptyStateEl.createEl("p", { text: "Select text in your note and use the 'add comment to selection' command to get started." });
             }
         } else {
             const emptyStateEl = this.containerEl.createDiv("sidenote-empty-state");
@@ -188,7 +188,7 @@ async function switchToSideNoteView(app: App) {
             state: { filePath: activeFile.path }, // CustomViewStateはfilePathを期待
             active: true, // 新しいビューをアクティブにする
         });
-        app.workspace.revealLeaf(leaf); // リーフが表示されるようにする
+        void app.workspace.revealLeaf(leaf); // リーフが表示されるようにする
     } else {
         new Notice("Failed to create or find a leaf for the comment view.");
     }
