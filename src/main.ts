@@ -37,6 +37,7 @@ class SideNoteView extends ItemView {
     }
 
     async onOpen() {
+        await Promise.resolve();
         this.renderComments();
     }
 
@@ -254,7 +255,7 @@ class SideNoteSettingTab extends PluginSettingTab {
             .addDropdown((dropdown) =>
                 dropdown
                     .addOption("timestamp", "By timestamp")
-                    .addOption("position", "By Position in File")
+                    .addOption("position", "By position in file")
                     .setValue(this.plugin.settings.commentSortOrder)
                     .onChange(async (value: "timestamp" | "position") => {
                         this.plugin.settings.commentSortOrder = value;
@@ -288,7 +289,7 @@ export default class SideNote extends Plugin {
             id: "open-comment-view",
             name: "Open comment view",
             callback: () => {
-                switchToSideNoteView(this.app);
+                void switchToSideNoteView(this.app);
             },
         });
 
@@ -366,7 +367,7 @@ export default class SideNote extends Plugin {
 
         // リボンアイコンを追加
         this.addRibbonIcon("message-square", "Open comment view", () => {
-            switchToSideNoteView(this.app);
+            void switchToSideNoteView(this.app);
         });
     }
 
@@ -382,17 +383,17 @@ export default class SideNote extends Plugin {
 
     addComment(newComment: Comment) {
         this.commentManager.addComment(newComment);
-        this.onCommentsChanged("Comment added!");
+        void this.onCommentsChanged("Comment added!");
     }
 
     editComment(timestamp: number, newCommentText: string) {
         this.commentManager.editComment(timestamp, newCommentText);
-        this.onCommentsChanged("Comment updated!");
+        void this.onCommentsChanged("Comment updated!");
     }
 
     deleteComment(timestamp: number) {
         this.commentManager.deleteComment(timestamp);
-        this.onCommentsChanged("Comment deleted!");
+        void this.onCommentsChanged("Comment deleted!");
     }
 
     async loadPluginData() {
