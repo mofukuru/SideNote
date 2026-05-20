@@ -14,7 +14,10 @@ SideNote is a plugin for [Obsidian](https://obsidian.md) that allows you to add 
 - **Auto-Tracking**: Comments automatically follow their text as you edit your notes using hash-based matching
 - **Click to Navigate**:
   - Click any comment in the side pane to jump to its location in the editor
+  - Double-click any comment to open the edit modal directly
   - Click any highlighted text in the editor to open the sidebar and highlight the corresponding comment
+- **Internal Link Support**: `[[WikiLinks]]` inside comment text are fully clickable and open the linked note
+- **Search Filter**: Filter comments in real time by typing in the search bar at the top of the sidebar (matches highlighted text and comment body; works in both Current File and All Notes views)
 - **Edit and Delete**: Manage your comments directly from the side pane
 - **Keyboard Shortcuts**: Use `Cmd/Ctrl + Enter` to save and close the comment modal, `Esc` to cancel, or click outside the modal to dismiss
 - **Flexible Sorting**: Sort comments by their position in the file or by their creation timestamp
@@ -22,12 +25,10 @@ SideNote is a plugin for [Obsidian](https://obsidian.md) that allows you to add 
 
 ### Advanced Features
 
-- **Hash-Based Text Tracking**: Comments use SHA256 hashes to track text accurately, even when multiple instances of the same text exist
-- **3-Stage Matching Strategy**:
-  1. Search near original coordinates with hash verification
-  2. Search entire file by hash (finds text even if it moves significantly)
-  3. Mark as orphaned if text is completely deleted
-- **Proximity-Based Selection**: When duplicate text exists, the system selects the match closest to the original position
+- **Operational Transformation Tracking**: Comment positions are stored as absolute character offsets and transformed through every document edit via CodeMirror 6's `ChangeSet.mapPos()`. No text search is performed during editing; highlights follow their exact text in real time.
+- **Accurate Duplicate Handling**: When the same string appears in multiple places, each comment tracks its own specific instance. The highlight never drifts to an unrelated occurrence, even when the original text is deleted.
+- **Instant Orphan Detection**: When the commented text is deleted, the range collapses immediately and a red marker appears at the last known position — without the highlight moving elsewhere.
+- **Undo Recovery**: Pressing Ctrl+Z to restore deleted text automatically recovers the comment when the file is saved.
 - **Active File Auto-Update**: When using sidebar mode, the comment view automatically updates as you switch between files
 - **Orphaned Comment Highlighting**: Deleted text locations are marked with a single red character (can be toggled off in settings)
 - **Optional Markdown Storage**: Store comments in per-note sidenote markdown files located in a configurable folder (defaults to `side-note-comments`)
@@ -58,13 +59,18 @@ SideNote is a plugin for [Obsidian](https://obsidian.md) that allows you to add 
 ### Navigating Comments
 
 - Click any comment in the side pane to jump to its location in the editor
+- **Double-click** any comment to open the edit modal directly
 - Click any highlighted text in the editor to open the sidebar (if not already open) and highlight the corresponding comment
 - Comments are highlighted directly in the text for easy visual reference
 
+### Searching Comments
+
+Type in the search bar at the top of the Side Note panel to filter comments in real time. The search matches against both the highlighted text and the comment body. Works in both Current File and All Notes views. Japanese, Chinese, Korean, and other IME-based input methods are fully supported — the filter does not interrupt the conversion process.
+
 ### Managing Comments
 
-- **Edit**: Click the pencil icon next to any comment
-- **Delete**: Click the trash icon next to any comment
+- **Edit**: Click the `...` menu next to any comment, or **double-click** the comment
+- **Delete**: Click the `...` menu → Delete
 - **Sort**: Change sort order in Settings → Comment sort order (by position or timestamp)
 
 ### Settings
@@ -138,9 +144,9 @@ Access settings via Settings → Side Note:
 
 ### Text Tracking Limitations
 
-**Short Text (< 10 characters)**: Comments on very short text may become unstable or jump to nearby identical text. For best results, select at least 10 characters when commenting.
+**Short Text (< 10 characters)**: Comments on very short text may be ambiguous on initial placement if the same short string appears multiple times. For best results, select at least 10 characters when commenting.
 
-**Duplicate Text**: When identical text appears multiple times, the system uses the closest match to the original position. However, extensive edits may occasionally cause comments to match the wrong instance.
+**Duplicate Text**: OT-based tracking keeps each comment on its own specific instance through editing sessions. After restarting Obsidian or editing the file externally, a ±10-line proximity search re-anchors positions, which may occasionally match the wrong instance if identical text appears within 10 lines of the original.
 
 ### Future Enhancements
 
@@ -150,12 +156,36 @@ Access settings via Settings → Side Note:
 
 ## Technical Details
 
-- Comments are stored in `data.json` with SHA256 hashes of the selected text
-- Hash-based matching ensures accurate text tracking even after file edits
-- Comments marked as "orphaned" when original text is deleted (stored but inactive)
+- Comments are stored in `data.json` with the selected text, its SHA256 hash, and position coordinates
+- **Highlight tracking** uses Operational Transformation (OT): positions are stored as absolute character offsets and transformed via CodeMirror 6's `ChangeSet.mapPos()` on every document change — no text search is performed during an editing session
+- When commented text is deleted the range collapses (`from === to`) and the comment is immediately marked as orphaned without drifting to another occurrence of the same string
+- On file save a ±10-line proximity search with SHA256 hash verification re-anchors positions for files modified outside Obsidian; the previous full-document fallback search has been removed to prevent drift
 - Uses CodeMirror 6 decorations for in-editor highlighting
 
 ## Version History
+
+### 1.0.6
+- **Fixed `[[WikiLink]]` internal links in comments** (issue [#11](https://github.com/mofukuru/SideNote/issues))
+  - Links inside comment text now correctly open the linked note
+  - Added an explicit `openLinkText` handler since Obsidian's workspace-level link handler does not activate in custom sidebar views
+  - Clicking a link no longer also triggers the "jump to editor position" behaviour
+- **Added search filter to sidebar** (issue [#20](https://github.com/mofukuru/SideNote/issues))
+  - A search input now appears at the top of the Side Note panel
+  - Filters comments in real time by highlighted text and comment body
+  - Works in both Current File and All Notes views
+  - Japanese, Chinese, Korean, and other IME-based input methods are supported without interrupting the conversion process
+- **Double-click to edit** (issue [#19](https://github.com/mofukuru/SideNote/issues))
+  - Double-clicking a comment in the sidebar opens the edit modal directly; single-click still jumps to the editor position
+- **Redesigned highlight tracking** (issue [#23](https://github.com/mofukuru/SideNote/issues))
+  - Replaced text-search-based positioning with Operational Transformation (OT) using CodeMirror 6's `ChangeSet.mapPos()`
+  - Highlights follow their exact text through edits without drifting to other occurrences of the same string
+  - Deleting commented text immediately marks the comment as orphaned (red marker) instead of moving the highlight elsewhere
+  - Removed the full-document hash search (`findTextByHashOptimized`) that was the root cause of highlight drift; a ±10-line proximity search is retained for files edited outside Obsidian
+  - Undo (Ctrl+Z) automatically recovers the comment when the file is saved
+- **Security hardening** (issue [#21](https://github.com/mofukuru/SideNote/issues))
+  - Added `normalizeCommentsFolderPath()`: rejects absolute paths and `..` segments, falls back to default with a Notice
+  - Replaced multi-line `[^]*?` regex in markdown block parsing with deterministic `indexOf`-based parsing
+  - Fixed event listener leak: bound click handler now stored as a class property and correctly removed on destroy
 
 ### 1.0.5
 - **Fixed duplicate comment creation** (issue [#16](https://github.com/mofukuru/SideNote/issues/16), [#18](https://github.com/mofukuru/SideNote/issues/18), [#10](https://github.com/mofukuru/SideNote/issues/10))

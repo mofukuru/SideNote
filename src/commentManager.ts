@@ -10,56 +10,24 @@ export interface Comment {
     comment: string;
     timestamp: number;
     isOrphaned?: boolean;
-    commentPath?: string; // Path to markdown-stored comment (optional)
-    resolved?: boolean; // Whether comment is marked as resolved (hidden but preserved)
-    resolvedAt?: number | null; // Timestamp when comment was resolved
+    commentPath?: string;
+    resolved?: boolean;
+    resolvedAt?: number | null;
 }
 
 export class CommentManager {
     private comments: Comment[];
-    private readonly MIN_TEXT_LENGTH = 3; // Minimum characters to create regex pattern
+    private readonly MIN_TEXT_LENGTH = 3;
 
     constructor(comments: Comment[]) {
         this.comments = comments;
     }
 
-    /**
-     * Generate SHA256 hash of the selected text using Web Crypto API (mobile-compatible)
-     * @param text The text to hash
-     * @returns The hash string
-     */
-    private async generateHashAsync(text: string): Promise<string> {
-        try {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(text);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            return hashHex;
-        } catch (error) {
-            // Fallback for environments without Web Crypto
-            console.warn('Web Crypto API failed, using simple hash', error);
-            let hash = 0;
-            for (let i = 0; i < text.length; i++) {
-                const char = text.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash = hash & hash;
-            }
-            return Math.abs(hash).toString(16);
-        }
-    }
-
-    /**
-     * Synchronous hash generation for backward compatibility
-     * Uses Web Crypto API when available, falls back to Node.js crypto
-     */
     private generateHash(text: string): string {
         try {
-            // Try Node.js crypto first (desktop)
             const nodeCrypto = require('crypto');
             return nodeCrypto.createHash('sha256').update(text).digest('hex');
         } catch {
-            // Fallback to simple hash (mobile)
             let hash = 0;
             for (let i = 0; i < text.length; i++) {
                 const char = text.charCodeAt(i);
@@ -71,11 +39,10 @@ export class CommentManager {
     }
 
     getCommentsForFile(filePath: string): Comment[] {
-        return this.comments.filter(comment => comment.filePath === filePath);
+        return this.comments.filter(c => c.filePath === filePath);
     }
 
     addComment(newComment: Comment) {
-        // Generate hash if not present
         if (!newComment.selectedTextHash) {
             newComment.selectedTextHash = this.generateHash(newComment.selectedText);
         }
@@ -83,23 +50,19 @@ export class CommentManager {
     }
 
     editComment(id: string, newCommentText: string) {
-        const commentToEdit = this.comments.find(comment => comment.id === id);
-        if (commentToEdit) {
-            commentToEdit.comment = newCommentText;
+        const comment = this.comments.find(c => c.id === id);
+        if (comment) {
+            comment.comment = newCommentText;
         }
     }
 
     deleteComment(id: string) {
-        const indexToDelete = this.comments.findIndex(comment => comment.id === id);
-        if (indexToDelete > -1) {
-            this.comments.splice(indexToDelete, 1);
+        const index = this.comments.findIndex(c => c.id === id);
+        if (index > -1) {
+            this.comments.splice(index, 1);
         }
     }
 
-    /**
-     * Mark a comment as resolved (hidden but preserved for audit trail)
-     * @param id The id of the comment to resolve
-     */
     resolveComment(id: string) {
         const comment = this.comments.find(c => c.id === id);
         if (comment) {
@@ -108,10 +71,6 @@ export class CommentManager {
         }
     }
 
-    /**
-     * Mark a comment as unresolved (reopened)
-     * @param id The id of the comment to unresolve
-     */
     unresolveComment(id: string) {
         const comment = this.comments.find(c => c.id === id);
         if (comment) {
@@ -120,41 +79,29 @@ export class CommentManager {
         }
     }
 
-    /**
-     * Delete all orphaned comments
-     * @returns The number of orphaned comments deleted
-     */
     deleteOrphanedComments(): number {
-        const initialLength = this.comments.length;
-        // Filter in-place to maintain reference
+        const before = this.comments.length;
+        // Backward splice preserves the shared array reference required by the plugin
         for (let i = this.comments.length - 1; i >= 0; i--) {
             if (this.comments[i].isOrphaned) {
                 this.comments.splice(i, 1);
             }
         }
-        return initialLength - this.comments.length;
+        return before - this.comments.length;
     }
 
-    /**
-     * Get all orphaned comments
-     * @returns Array of orphaned comments
-     */
     getOrphanedComments(): Comment[] {
-        return this.comments.filter(comment => comment.isOrphaned);
+        return this.comments.filter(c => c.isOrphaned);
     }
 
-    /**
-     * Get the count of orphaned comments
-     * @returns Number of orphaned comments
-     */
     getOrphanedCommentCount(): number {
-        return this.comments.filter(comment => comment.isOrphaned).length;
+        return this.getOrphanedComments().length;
     }
 
     renameFile(oldPath: string, newPath: string) {
-        this.comments.forEach(comment => {
-            if (comment.filePath === oldPath) {
-                comment.filePath = newPath;
+        this.comments.forEach(c => {
+            if (c.filePath === oldPath) {
+                c.filePath = newPath;
             }
         });
     }
@@ -167,311 +114,151 @@ export class CommentManager {
         return this.comments;
     }
 
-    /**
-     * Calculate distance between two positions (for finding closest match)
-     * @param line1 First line number
-     * @param char1 First character position
-     * @param line2 Second line number
-     * @param char2 Second character position
-     * @returns Distance score (lower is closer)
-     */
+    // Weight line distance more heavily than char distance so nearby lines rank first
     private calculateDistance(line1: number, char1: number, line2: number, char2: number): number {
-        // Weight line distance more heavily than character distance
-        const lineDistance = Math.abs(line1 - line2);
-        const charDistance = Math.abs(char1 - char2);
-        return lineDistance * 1000 + charDistance;
+        return Math.abs(line1 - line2) * 1000 + Math.abs(char1 - char2);
     }
 
-    /**
-     * Find text position with hash verification for accuracy
-     * Strategy 1: Search around hint coordinates and verify hash match
-     * When multiple matches exist, returns the one closest to the hint coordinates
-     * @param fileContent The current file content
-     * @param selectedText The text to find
-     * @param selectedTextHash The hash of the selected text
-     * @param hintStartLine Starting line as a hint
-     * @param hintStartChar Starting character as a hint
-     * @param hintEndLine Ending line as a hint
-     * @returns Object with line, startChar, endChar or null if not found
-     */
-    private findTextPositionWithHashVerification(fileContent: string, selectedText: string, selectedTextHash: string, hintStartLine: number, hintStartChar: number, hintEndLine: number): { line: number; startChar: number; endChar: number } | null {
-        if (!selectedText || selectedText.length < this.MIN_TEXT_LENGTH) {
-            return null;
-        }
+    private findTextPositionWithHashVerification(
+        fileContent: string,
+        selectedText: string,
+        selectedTextHash: string,
+        hintStartLine: number,
+        hintStartChar: number,
+        hintEndLine: number,
+    ): { line: number; startChar: number; endChar: number } | null {
+        if (!selectedText || selectedText.length < this.MIN_TEXT_LENGTH) return null;
 
         const lines = fileContent.split('\n');
         const escapedText = selectedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escapedText, 'g'); // Use global flag to find all matches
+        const regex = new RegExp(escapedText, 'g');
 
-        // Search within a range around the hint (±10 lines for flexibility)
         const startLine = Math.max(0, hintStartLine - 10);
         const endLine = Math.min(lines.length, hintEndLine + 10);
 
-        let candidates: { line: number; startChar: number; endChar: number; distance: number }[] = [];
+        const candidates: { line: number; startChar: number; endChar: number; distance: number }[] = [];
 
-        // Search through the hint range and collect all matching candidates
         for (let lineNum = startLine; lineNum < endLine; lineNum++) {
+            regex.lastIndex = 0;
             let match;
-            regex.lastIndex = 0; // Reset regex state
             while ((match = regex.exec(lines[lineNum])) !== null) {
                 const foundText = lines[lineNum].substring(match.index, match.index + selectedText.length);
-                // Verify hash matches to ensure correct text
                 if (this.generateHash(foundText) === selectedTextHash) {
-                    const distance = this.calculateDistance(lineNum, match.index, hintStartLine, hintStartChar);
                     candidates.push({
                         line: lineNum,
                         startChar: match.index,
                         endChar: match.index + selectedText.length,
-                        distance: distance
+                        distance: this.calculateDistance(lineNum, match.index, hintStartLine, hintStartChar),
                     });
                 }
             }
         }
 
-        // Return the candidate closest to the hint coordinates
-        if (candidates.length > 0) {
-            candidates.sort((a, b) => a.distance - b.distance);
-            const closest = candidates[0];
-            return {
-                line: closest.line,
-                startChar: closest.startChar,
-                endChar: closest.endChar
-            };
-        }
-
-        return null;
+        if (candidates.length === 0) return null;
+        candidates.sort((a, b) => a.distance - b.distance);
+        const { line, startChar, endChar } = candidates[0];
+        return { line, startChar, endChar };
     }
 
-    /**
-     * Find text by hash across the entire file
-     * Strategy 2: Search entire file for matching hash using optimized approach
-     * When multiple matches exist, returns the one closest to the hint coordinates
-     * @param fileContent The current file content
-     * @param selectedTextHash The hash to match
-     * @param originalTextLength The length of the original selected text (optimization hint)
-     * @param hintStartLine Starting line hint for proximity scoring
-     * @param hintStartChar Starting character hint for proximity scoring
-     * @returns Object with line, startChar, endChar, text or null if not found
-     */
-    private findTextByHashOptimized(fileContent: string, selectedTextHash: string, originalTextLength: number, hintStartLine?: number, hintStartChar?: number): { line: number; startChar: number; endChar: number; text: string } | null {
+    private findTextByHashOptimized(
+        fileContent: string,
+        selectedTextHash: string,
+        originalTextLength: number,
+        hintStartLine?: number,
+        hintStartChar?: number,
+    ): { line: number; startChar: number; endChar: number; text: string } | null {
         const lines = fileContent.split('\n');
-        let candidates: { line: number; startChar: number; endChar: number; text: string; distance: number }[] = [];
+        const candidates: { line: number; startChar: number; endChar: number; text: string; distance: number }[] = [];
 
-        // Search entire file for text with matching hash
         for (let lineNum = 0; lineNum < lines.length; lineNum++) {
             const line = lines[lineNum];
 
-            // First, try exact length match (most common case)
-            if (line.length >= originalTextLength) {
-                for (let startChar = 0; startChar <= line.length - originalTextLength; startChar++) {
-                    const candidate = line.substring(startChar, startChar + originalTextLength);
-                    if (this.generateHash(candidate) === selectedTextHash) {
-                        const distance = (hintStartLine !== undefined && hintStartChar !== undefined)
-                            ? this.calculateDistance(lineNum, startChar, hintStartLine, hintStartChar)
-                            : 0;
-                        candidates.push({
-                            line: lineNum,
-                            startChar: startChar,
-                            endChar: startChar + originalTextLength,
-                            text: candidate,
-                            distance: distance
-                        });
-                    }
-                }
-            }
+            const lengths = new Set([originalTextLength]);
+            const minLen = Math.max(this.MIN_TEXT_LENGTH, Math.floor(originalTextLength * 0.8));
+            const maxLen = Math.min(line.length, Math.ceil(originalTextLength * 1.2));
+            for (let l = minLen; l <= maxLen; l++) lengths.add(l);
 
-            // If not found with exact length, try nearby lengths (±20% tolerance for edge cases)
-            const minLength = Math.max(this.MIN_TEXT_LENGTH, Math.floor(originalTextLength * 0.8));
-            const maxLength = Math.min(line.length, Math.ceil(originalTextLength * 1.2));
-
-            for (let length = minLength; length <= maxLength; length++) {
-                if (length === originalTextLength) continue; // Already checked
-
+            for (const length of lengths) {
+                if (line.length < length) continue;
                 for (let startChar = 0; startChar <= line.length - length; startChar++) {
                     const candidate = line.substring(startChar, startChar + length);
                     if (this.generateHash(candidate) === selectedTextHash) {
                         const distance = (hintStartLine !== undefined && hintStartChar !== undefined)
                             ? this.calculateDistance(lineNum, startChar, hintStartLine, hintStartChar)
                             : 0;
-                        candidates.push({
-                            line: lineNum,
-                            startChar: startChar,
-                            endChar: startChar + length,
-                            text: candidate,
-                            distance: distance
-                        });
+                        candidates.push({ line: lineNum, startChar, endChar: startChar + length, text: candidate, distance });
                     }
                 }
             }
         }
 
-        // Return the candidate closest to the hint coordinates
-        if (candidates.length > 0) {
-            candidates.sort((a, b) => a.distance - b.distance);
-            const closest = candidates[0];
-            return {
-                line: closest.line,
-                startChar: closest.startChar,
-                endChar: closest.endChar,
-                text: closest.text
-            };
-        }
-
-        return null;
+        if (candidates.length === 0) return null;
+        candidates.sort((a, b) => a.distance - b.distance);
+        const { line, startChar, endChar, text } = candidates[0];
+        return { line, startChar, endChar, text };
     }
 
-    /**
-     * Find the position of selected text in the current file content
-     * Uses regex matching as a fallback to line-based positioning
-     * When multiple matches exist, returns the one closest to hint coordinates
-     * @param fileContent The current file content
-     * @param selectedText The text to find
-     * @param hintStartLine Optional starting line as a hint (performance optimization)
-     * @param hintEndLine Optional ending line as a hint (performance optimization)
-     * @param hintStartChar Optional starting character as a hint (performance optimization)
-     * @returns Object with line, startChar, endChar or null if not found
-     */
-    findTextPosition(fileContent: string, selectedText: string, hintStartLine?: number, hintEndLine?: number, hintStartChar?: number): { line: number; startChar: number; endChar: number } | null {
-        if (!selectedText || selectedText.length < this.MIN_TEXT_LENGTH) {
-            return null;
-        }
+    findTextPosition(
+        fileContent: string,
+        selectedText: string,
+        hintStartLine?: number,
+        hintEndLine?: number,
+        hintStartChar?: number,
+    ): { line: number; startChar: number; endChar: number } | null {
+        if (!selectedText || selectedText.length < this.MIN_TEXT_LENGTH) return null;
 
         const lines = fileContent.split('\n');
-
-        // Escape special regex characters
         const escapedText = selectedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Create a regex that matches the text (case-sensitive) with global flag
         const regex = new RegExp(escapedText, 'g');
 
-        let candidates: { line: number; startChar: number; endChar: number; distance: number }[] = [];
-
-        // Determine search range - prioritize hint range if provided
-        let startLine = 0;
-        let endLine = lines.length;
-
-        if (hintStartLine !== undefined && hintEndLine !== undefined) {
-            // Search within a range around the hint (±10 lines for flexibility)
-            startLine = Math.max(0, hintStartLine - 10);
-            endLine = Math.min(lines.length, hintEndLine + 10);
-        }
-
-        // Search through the content and collect all matches
-        for (let lineNum = startLine; lineNum < endLine; lineNum++) {
-            let match;
-            regex.lastIndex = 0; // Reset regex state
-            while ((match = regex.exec(lines[lineNum])) !== null) {
-                const distance = (hintStartLine !== undefined && hintStartChar !== undefined)
-                    ? this.calculateDistance(lineNum, match.index, hintStartLine, hintStartChar)
-                    : 0;
-                candidates.push({
-                    line: lineNum,
-                    startChar: match.index,
-                    endChar: match.index + selectedText.length,
-                    distance: distance
-                });
-            }
-        }
-
-        // If found in hint range, return the closest match
-        if (candidates.length > 0) {
-            candidates.sort((a, b) => a.distance - b.distance);
-            const closest = candidates[0];
-            return {
-                line: closest.line,
-                startChar: closest.startChar,
-                endChar: closest.endChar
-            };
-        }
-
-        // If not found in hint range, search entire file
-        if (hintStartLine !== undefined && hintEndLine !== undefined) {
-            candidates = [];
-            for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-                let match;
+        const searchRange = (startLine: number, endLine: number) => {
+            const found: { line: number; startChar: number; endChar: number; distance: number }[] = [];
+            for (let lineNum = startLine; lineNum < endLine; lineNum++) {
                 regex.lastIndex = 0;
+                let match;
                 while ((match = regex.exec(lines[lineNum])) !== null) {
                     const distance = (hintStartLine !== undefined && hintStartChar !== undefined)
                         ? this.calculateDistance(lineNum, match.index, hintStartLine, hintStartChar)
                         : 0;
-                    candidates.push({
-                        line: lineNum,
-                        startChar: match.index,
-                        endChar: match.index + selectedText.length,
-                        distance: distance
-                    });
+                    found.push({ line: lineNum, startChar: match.index, endChar: match.index + selectedText.length, distance });
                 }
             }
+            return found;
+        };
 
-            if (candidates.length > 0) {
-                candidates.sort((a, b) => a.distance - b.distance);
-                const closest = candidates[0];
-                return {
-                    line: closest.line,
-                    startChar: closest.startChar,
-                    endChar: closest.endChar
-                };
-            }
+        const rangeStart = hintStartLine !== undefined ? Math.max(0, hintStartLine - 10) : 0;
+        const rangeEnd = hintEndLine !== undefined ? Math.min(lines.length, hintEndLine + 10) : lines.length;
+
+        let candidates = searchRange(rangeStart, rangeEnd);
+
+        if (candidates.length === 0 && hintStartLine !== undefined) {
+            candidates = searchRange(0, lines.length);
         }
 
-        return null;
+        if (candidates.length === 0) return null;
+        candidates.sort((a, b) => a.distance - b.distance);
+        const { line, startChar, endChar } = candidates[0];
+        return { line, startChar, endChar };
     }
 
-    /**
-     * Update comment coordinates based on file content changes
-     * Uses 3-stage hash-based matching strategy:
-     * 1. Search near old coordinates with hash verification
-     * 2. Search entire file by hash
-     * 3. Mark as orphaned if not found
-     * @param fileContent The current file content
-     * @param filePath The path of the file that was changed
-     */
     updateCommentCoordinatesForFile(fileContent: string, filePath: string): void {
-        const fileComments = this.comments.filter(comment => comment.filePath === filePath);
+        const fileComments = this.comments.filter(c => c.filePath === filePath);
+        const lines = fileContent.split('\n');
 
-        fileComments.forEach(comment => {
-            let newPosition: { line: number; startChar: number; endChar: number } | null = null;
-
-            // Stage 1: Search near old coordinates with hash verification
-            if (comment.selectedTextHash) {
-                newPosition = this.findTextPositionWithHashVerification(
-                    fileContent,
-                    comment.selectedText,
-                    comment.selectedTextHash,
-                    comment.startLine,
-                    comment.startChar,
-                    comment.endLine
-                );
-            }
-
-            // Stage 2: Search entire file by hash if not found in Stage 1
-            if (!newPosition && comment.selectedTextHash && comment.selectedText) {
-                const hashMatch = this.findTextByHashOptimized(
-                    fileContent,
-                    comment.selectedTextHash,
-                    comment.selectedText.length,
-                    comment.startLine,
-                    comment.startChar
-                );
-                if (hashMatch) {
-                    newPosition = hashMatch;
-                    // Update selectedText in case it was modified
-                    comment.selectedText = hashMatch.text;
+        for (const comment of fileComments) {
+            if (comment.isOrphaned) {
+                // The CM6 highlight plugin (OT tracking) or a previous check already
+                // marked this orphaned.  Only recover if the text is back at the exact
+                // stored coordinates — this handles Ctrl+Z undo without searching elsewhere.
+                if (this.textAtCoordsMatches(lines, comment)) {
+                    comment.isOrphaned = false;
                 }
+                // Either recovered above or stays orphaned — do not fall through to search.
+                continue;
             }
 
-            // Stage 3: Fall back to regex search without hash (only for legacy comments without hash)
-            // Do NOT use this stage if hash exists but doesn't match - that means text was deleted
-            if (!newPosition && !comment.selectedTextHash) {
-                newPosition = this.findTextPosition(
-                    fileContent,
-                    comment.selectedText,
-                    comment.startLine,
-                    comment.endLine,
-                    comment.startChar
-                );
-            }
+            const newPosition = this.resolveCommentPosition(fileContent, comment);
 
-            // Update or mark as orphaned; recover previously orphaned comments if text is found again
             if (newPosition) {
                 comment.startLine = newPosition.line;
                 comment.startChar = newPosition.startChar;
@@ -481,6 +268,49 @@ export class CommentManager {
             } else {
                 comment.isOrphaned = true;
             }
-        });
+        }
+    }
+
+    private textAtCoordsMatches(lines: string[], comment: Comment): boolean {
+        if (comment.startLine < 0 || comment.startLine >= lines.length) return false;
+        const line = lines[comment.startLine];
+        if (comment.startChar < 0 || comment.endChar > line.length || comment.startChar > comment.endChar) return false;
+        return line.slice(comment.startChar, comment.endChar) === comment.selectedText;
+    }
+
+    private resolveCommentPosition(
+        fileContent: string,
+        comment: Comment,
+    ): { line: number; startChar: number; endChar: number } | null {
+        if (comment.selectedTextHash) {
+            // Step 1: verify hash within ±10 lines (handles minor position shifts,
+            // e.g. external edits or pastes that moved the text slightly).
+            const byHash = this.findTextPositionWithHashVerification(
+                fileContent,
+                comment.selectedText,
+                comment.selectedTextHash,
+                comment.startLine,
+                comment.startChar,
+                comment.endLine,
+            );
+            if (byHash) return byHash;
+
+            // Do NOT fall back to a full-document hash scan here.
+            // findTextByHashOptimized would match any identical text anywhere in the
+            // file, causing highlights to drift to unrelated occurrences when the
+            // original text is deleted.  The CM6 OT plugin keeps coordinates in sync
+            // during editing, so a full-document search is never necessary for normal
+            // use; and for external edits the ±10-line search above is sufficient.
+            return null;
+        }
+
+        // Legacy comments without hash: fall back to regex
+        return this.findTextPosition(
+            fileContent,
+            comment.selectedText,
+            comment.startLine,
+            comment.endLine,
+            comment.startChar,
+        );
     }
 }

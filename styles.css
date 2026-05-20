@@ -407,12 +407,29 @@
     }
 }
 
-/* View header toggle */
+/* View header */
 .sidenote-view-header {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
     padding: 4px 8px;
     border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sidenote-search-input {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-ui-smaller);
+    padding: 2px 6px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    color: var(--text-normal);
+    outline: none;
+}
+
+.sidenote-search-input:focus {
+    border-color: var(--interactive-accent);
 }
 
 .sidenote-view-toggle {
