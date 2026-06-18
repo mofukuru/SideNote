@@ -182,6 +182,19 @@ Access settings via Settings → Side Note:
 
 ## Version History
 
+### 1.0.8
+- **Fixed comment navigation scroll position** — clicking a comment in the sidebar now reliably centers the highlighted text in the editor viewport
+  - Previously, `editor.focus()` called after `scrollIntoView` would trigger a browser focus-scroll ("nearest" mode) that overrode the intended centered position
+  - Fixed by removing the redundant `focus()` call (focus is already handled by `setActiveLeaf`) and adding a short defer so all side-effects of `setActiveLeaf` settle before the scroll runs
+- **Enabled `![[embed]]` transclusion rendering in comment text**
+  - Embedded notes (`![[note.md]]`) are now rendered inline inside the comment card instead of being converted to plain wiki links
+  - Works because `MarkdownRenderer.render` is called with the correct `sourcePath` and `component`, giving it the context it needs to resolve and display the embedded content
+  - Migrated from the deprecated `MarkdownRenderer.renderMarkdown` to the current `MarkdownRenderer.render` API
+- **Fixed callout and blockquote rendering in comment text**
+  - Callouts (`> [!NOTE]`, `> [!WARNING]`, etc.) and blockquotes (`> ...`) were displaying without Obsidian styling — appearing as unstyled plain text
+  - Root cause: Obsidian's CSS scopes callout and blockquote styles under a `.markdown-rendered` ancestor; the comment content wrapper was missing that class
+  - Fixed by adding `markdown-rendered` to the content wrapper and adding CSS to prevent excessive margins from inflating the comment card height
+
 ### 1.0.7
 - **Added note comments** — attach a comment to an entire note without selecting any text
   - New "Side Note: Add note comment" command in the command palette

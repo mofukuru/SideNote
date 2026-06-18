@@ -238,11 +238,11 @@ export class SideNoteView extends ItemView {
             };
 
             // --- Rendered comment content ---
-            const contentWrapper = commentEl.createDiv({ cls: "sidenote-comment-content" });
-            // Convert ![[embed]] to [[link]] — ItemView context cannot resolve transclusions,
-            // so render them as clickable wiki links instead.
-            const commentText = (comment.comment || "").replace(/!\[\[/g, '[[');
-            MarkdownRenderer.renderMarkdown(commentText, contentWrapper, comment.filePath, this);
+            // markdown-rendered is required so Obsidian's CSS scopes (blockquote,
+            // callout, etc.) resolve correctly inside a custom ItemView.
+            const contentWrapper = commentEl.createDiv({ cls: "sidenote-comment-content markdown-rendered" });
+            const commentText = comment.comment || "";
+            void MarkdownRenderer.render(this.app, commentText, contentWrapper, comment.filePath, this);
 
             // Custom ItemView context: Obsidian's workspace-level link handler does not fire here.
             contentWrapper.addEventListener('click', (e: MouseEvent) => {

@@ -213,6 +213,22 @@
     word-wrap: break-word;
 }
 
+/* Suppress the large top/bottom margin that markdown-rendered adds to the
+   first and last block elements so comment cards don't grow too tall. */
+.sidenote-comment-content > :first-child { margin-top: 0 !important; }
+.sidenote-comment-content > :last-child  { margin-bottom: 0 !important; }
+
+/* Callouts inside comments: constrain width and avoid inheriting the card cursor */
+.sidenote-comment-content .callout {
+    margin: 4px 0;
+    cursor: auto;
+}
+
+/* Blockquotes inside comments */
+.sidenote-comment-content blockquote {
+    margin: 4px 0;
+}
+
 .sidenote-comment-actions {
     display: flex;
     gap: 8px;
