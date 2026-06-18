@@ -89,6 +89,95 @@
     color: var(--text-disabled);
 }
 
+/* Note comment: whole-note annotation with no text selection */
+.sidenote-comment-item.sidenote-note-comment {
+    border-left: 3px solid var(--interactive-accent);
+}
+
+.sidenote-comment-item.sidenote-note-comment .sidenote-selected-text {
+    color: var(--interactive-accent);
+    font-style: italic;
+}
+
+/* Inline edit / add form */
+.sidenote-new-comment-form {
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--interactive-accent);
+    background-color: var(--background-secondary);
+}
+
+.sidenote-new-comment-label {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidenote-edit-form {
+    margin-top: 4px;
+}
+
+.sidenote-edit-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px;
+    font-size: var(--font-text-size, 14px);
+    font-family: var(--font-text);
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    resize: vertical;
+    box-sizing: border-box;
+    outline: none;
+    line-height: 1.5;
+}
+
+.sidenote-edit-textarea:focus {
+    border-color: var(--interactive-accent);
+}
+
+.sidenote-edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 6px;
+}
+
+.sidenote-edit-save {
+    padding: 4px 14px;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.sidenote-edit-save:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+.sidenote-edit-cancel {
+    padding: 4px 14px;
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.sidenote-edit-cancel:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
 .sidenote-comment-header {
     display: flex;
     justify-content: space-between;

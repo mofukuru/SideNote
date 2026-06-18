@@ -5,7 +5,6 @@ import { SideNoteView } from "./SideNoteView";
 import { SideNoteSettingTab } from "./SideNoteSettingTab";
 import { createHighlightPlugin, forceUpdateEffect, EditorWithCM } from "./highlightPlugin";
 import { switchToSideNoteView, generateHash, generateCommentId } from "./utils";
-import { CommentModal } from "./CommentModal";
 import { DEFAULT_SETTINGS } from "./types";
 import type { PluginData, SideNoteSettings } from "./types";
 
@@ -112,11 +111,25 @@ export default class SideNote extends Plugin {
         });
 
         this.addCommand({
+            id: "add-note-comment",
+            name: "Add note comment",
+            icon: "sticky-note",
+            callback: () => {
+                const file = this.app.workspace.getActiveFile();
+                if (!file) {
+                    new Notice("SideNote: No active file to comment on.");
+                    return;
+                }
+                void this.openInlineNoteComment(file.path);
+            },
+        });
+
+        this.addCommand({
             id: "add-comment-to-selection",
             name: "Add comment to selection",
             icon: "message-square",
             editorCallback: (editor, view) => {
-                this.openAddCommentModal(editor, view.file?.path);
+                void this.openAddCommentModal(editor, view.file?.path);
             },
         });
 
@@ -127,6 +140,16 @@ export default class SideNote extends Plugin {
                         item.setTitle("Add comment to selection")
                             .setIcon("message-square")
                             .onClick(() => this.openAddCommentModal(editor, view.file?.path));
+                    });
+                } else {
+                    menu.addItem((item) => {
+                        item.setTitle("Add note comment")
+                            .setIcon("sticky-note")
+                            .onClick(() => {
+                                const file = view.file;
+                                if (!file) return;
+                                void this.openInlineNoteComment(file.path);
+                            });
                     });
                 }
             })
@@ -282,7 +305,7 @@ export default class SideNote extends Plugin {
         await this.onCommentsChanged("Comment reopened!");
     }
 
-    private openAddCommentModal(editor: Editor, filePath: string | undefined) {
+    private async openAddCommentModal(editor: Editor, filePath: string | undefined) {
         const selection = editor.getSelection();
         if (!selection?.trim() || !filePath) {
             new Notice("Please select some text to add a comment.");
@@ -290,22 +313,40 @@ export default class SideNote extends Plugin {
         }
         const cursorStart = editor.getCursor("from");
         const cursorEnd = editor.getCursor("to");
-        new CommentModal(this.app, async (commentText) => {
-            const newComment: Comment = {
-                id: generateCommentId(),
-                filePath,
-                startLine: cursorStart.line,
-                startChar: cursorStart.ch,
-                endLine: cursorEnd.line,
-                endChar: cursorEnd.ch,
-                selectedText: selection,
-                selectedTextHash: await generateHash(selection),
-                comment: commentText,
-                timestamp: Date.now(),
-                isOrphaned: false,
-            };
-            await this.addComment(newComment);
-        }).open();
+        const hash = await generateHash(selection);
+        await this.activateView();
+        this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
+            if (leaf.view instanceof SideNoteView) {
+                leaf.view.openInlineNewComment({
+                    filePath: filePath!,
+                    isNoteComment: false,
+                    selectedText: selection,
+                    selectedTextHash: hash,
+                    startLine: cursorStart.line,
+                    startChar: cursorStart.ch,
+                    endLine: cursorEnd.line,
+                    endChar: cursorEnd.ch,
+                });
+            }
+        });
+    }
+
+    private async openInlineNoteComment(filePath: string): Promise<void> {
+        await this.activateView();
+        this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
+            if (leaf.view instanceof SideNoteView) {
+                leaf.view.openInlineNewComment({
+                    filePath,
+                    isNoteComment: true,
+                    selectedText: "",
+                    selectedTextHash: "",
+                    startLine: 0,
+                    startChar: 0,
+                    endLine: 0,
+                    endChar: 0,
+                });
+            }
+        });
     }
 
     async loadPluginData() {
@@ -336,6 +377,10 @@ export default class SideNote extends Plugin {
             }
             if (comment.isOrphaned === undefined) {
                 comment.isOrphaned = false;
+                needsSave = true;
+            }
+            if (comment.isNoteComment === undefined) {
+                comment.isNoteComment = false;
                 needsSave = true;
             }
         }

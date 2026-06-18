@@ -16,6 +16,9 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
         view: EditorView;
         boundHandleClick: (e: MouseEvent) => void;
         private positions: Map<string, { from: number; to: number; selectedText: string }> = new Map();
+        // Tracks the current document position of orphaned comments so the red dot
+        // follows edits instead of staying frozen at the moment of orphaning.
+        private orphanedAt: Map<string, number> = new Map();
         private filePath: string | null = null;
 
         constructor(view: EditorView) {
@@ -50,23 +53,55 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
         }
 
         private initPositions(view: EditorView) {
-            this.positions = new Map();
+            this.positions   = new Map();
+            this.orphanedAt  = new Map();
             if (!this.filePath || !plugin.settings.showHighlights) return;
             const doc = view.state.doc;
             for (const comment of plugin.commentManager.getCommentsForFile(this.filePath)) {
-                if (comment.resolved || comment.isOrphaned) continue;
+                if (comment.resolved || comment.isNoteComment) continue;
+
+                if (comment.isOrphaned) {
+                    // Register a single-point marker so the red dot can be OT-tracked.
+                    try {
+                        let pos: number;
+                        if (comment.startOffset !== undefined && comment.startOffset >= 0 && comment.startOffset < doc.length) {
+                            pos = comment.startOffset;
+                        } else {
+                            const sl = doc.line(comment.startLine + 1);
+                            pos = sl.from + comment.startChar;
+                        }
+                        if (pos >= 0 && pos <= doc.length) this.orphanedAt.set(comment.id, pos);
+                    } catch { /* line out of range */ }
+                    continue;
+                }
+
                 try {
-                    const sl = doc.line(comment.startLine + 1);
-                    const from = sl.from + comment.startChar;
-                    const el = doc.line(comment.endLine + 1);
-                    const to = el.from + comment.endChar;
+                    // Prefer stored absolute offsets (set by a previous OT session).
+                    // Fall back to line/char when offsets are missing or out of range.
+                    let from: number, to: number;
+                    if (
+                        comment.startOffset !== undefined &&
+                        comment.endOffset !== undefined &&
+                        comment.startOffset >= 0 &&
+                        comment.endOffset <= doc.length &&
+                        comment.startOffset < comment.endOffset
+                    ) {
+                        from = comment.startOffset;
+                        to   = comment.endOffset;
+                    } else {
+                        const sl = doc.line(comment.startLine + 1);
+                        from = sl.from + comment.startChar;
+                        const el = doc.line(comment.endLine + 1);
+                        to   = el.from + comment.endChar;
+                    }
+
                     if (from >= 0 && to <= doc.length && from < to) {
-                        // Verify the text at these coordinates matches what was commented on.
-                        // If it doesn't, the stored coordinates are stale — skip rather than
-                        // placing a highlight on the wrong text.
                         const textAtCoords = doc.sliceString(from, to);
                         if (textAtCoords === comment.selectedText) {
                             this.positions.set(comment.id, { from, to, selectedText: comment.selectedText });
+                            // Always persist the verified offsets so the fast path works next session.
+                            comment.startOffset = from;
+                            comment.endOffset   = to;
                         }
                     }
                 } catch { /* line out of range */ }
@@ -82,45 +117,83 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
                 this.filePath = this.resolveFilePath(update.view);
                 this.initPositions(update.view);
             } else if (update.docChanged) {
-                const newPositions = new Map<string, { from: number; to: number; selectedText: string }>();
+                const newPositions  = new Map<string, { from: number; to: number; selectedText: string }>();
+                const newOrphanedAt = new Map<string, number>();
                 const doc = update.view.state.doc;
 
+                // --- Active (yellow) highlights ---
                 for (const [id, { from, to, selectedText }] of this.positions) {
-                    const newFrom = update.changes.mapPos(from, -1);
-                    const newTo   = update.changes.mapPos(to,   1);
+                    // assoc=1 for from: insertion AT from maps to the right of inserted text,
+                    // keeping the highlight start anchored to the original selected text.
+                    // assoc=-1 for to: insertion AT to stays left of inserted text,
+                    // keeping the highlight end anchored without absorbing appended text.
+                    const newFrom = update.changes.mapPos(from,  1);
+                    const newTo   = update.changes.mapPos(to,   -1);
 
-                    if (newFrom < newTo) {
-                        // Verify the text content is still correct after the change.
-                        // This catches partial edits within the highlighted range.
-                        const currentText = doc.sliceString(newFrom, newTo);
-                        if (currentText === selectedText) {
-                            newPositions.set(id, { from: newFrom, to: newTo, selectedText });
-                            // Sync to comment manager for sidebar navigation accuracy.
-                            // Do NOT sync when orphaning — we want to preserve the last-known-good
-                            // coordinates for undo recovery.
-                            const comment = plugin.commentManager.getComments().find(c => c.id === id);
-                            if (comment) {
-                                const sl = doc.lineAt(newFrom);
-                                const el = doc.lineAt(newTo);
-                                comment.startLine = sl.number - 1;
-                                comment.startChar  = newFrom - sl.from;
-                                comment.endLine   = el.number - 1;
-                                comment.endChar   = newTo   - el.from;
-                            }
-                        } else {
-                            // Text content changed within range → orphan.
-                            // Keep stored coords unchanged so undo can recover.
-                            const comment = plugin.commentManager.getComments().find(c => c.id === id);
-                            if (comment) comment.isOrphaned = true;
+                    if (newFrom < newTo && doc.sliceString(newFrom, newTo) === selectedText) {
+                        newPositions.set(id, { from: newFrom, to: newTo, selectedText });
+                        const comment = plugin.commentManager.getComments().find(c => c.id === id);
+                        if (comment) {
+                            const sl = doc.lineAt(newFrom);
+                            const el = doc.lineAt(newTo);
+                            comment.startLine   = sl.number - 1;
+                            comment.startChar   = newFrom - sl.from;
+                            comment.endLine     = el.number - 1;
+                            comment.endChar     = newTo   - el.from;
+                            comment.startOffset = newFrom;
+                            comment.endOffset   = newTo;
                         }
                     } else {
-                        // Range collapsed (text fully deleted) → orphan.
+                        // Text changed or collapsed → orphan. Track the nearest surviving position
+                        // so the red dot follows subsequent edits instead of staying frozen.
+                        const orphanPos = newFrom <= doc.length ? newFrom : doc.length;
+                        newOrphanedAt.set(id, orphanPos);
                         const comment = plugin.commentManager.getComments().find(c => c.id === id);
-                        if (comment) comment.isOrphaned = true;
+                        if (comment) {
+                            comment.isOrphaned  = true;
+                            comment.startOffset = orphanPos;
+                            comment.endOffset   = orphanPos;
+                            const sl = doc.lineAt(orphanPos);
+                            comment.startLine = sl.number - 1;
+                            comment.startChar = orphanPos - sl.from;
+                        }
                     }
                 }
 
-                this.positions = newPositions;
+                // --- Orphaned (red) highlights: keep tracking & check for undo recovery ---
+                for (const [id, pos] of this.orphanedAt) {
+                    const newPos = update.changes.mapPos(pos, -1);
+                    const comment = plugin.commentManager.getComments().find(c => c.id === id);
+                    if (!comment) continue;
+
+                    // Undo recovery: check if selectedText reappears at the tracked position.
+                    const recoveryEnd = newPos + comment.selectedText.length;
+                    if (
+                        recoveryEnd <= doc.length &&
+                        doc.sliceString(newPos, recoveryEnd) === comment.selectedText
+                    ) {
+                        comment.isOrphaned  = false;
+                        comment.startOffset = newPos;
+                        comment.endOffset   = recoveryEnd;
+                        const sl = doc.lineAt(newPos);
+                        const el = doc.lineAt(recoveryEnd);
+                        comment.startLine = sl.number - 1;
+                        comment.startChar = newPos      - sl.from;
+                        comment.endLine   = el.number - 1;
+                        comment.endChar   = recoveryEnd - el.from;
+                        newPositions.set(id, { from: newPos, to: recoveryEnd, selectedText: comment.selectedText });
+                    } else {
+                        newOrphanedAt.set(id, newPos);
+                        comment.startOffset = newPos;
+                        comment.endOffset   = newPos;
+                        const sl = doc.lineAt(newPos);
+                        comment.startLine = sl.number - 1;
+                        comment.startChar = newPos - sl.from;
+                    }
+                }
+
+                this.positions  = newPositions;
+                this.orphanedAt = newOrphanedAt;
             }
 
             this.decorations = this.buildDecorations(update.view);
@@ -146,11 +219,14 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
             }
 
             for (const comment of plugin.commentManager.getCommentsForFile(this.filePath)) {
-                if (comment.resolved || !comment.isOrphaned) continue;
+                if (comment.resolved || comment.isNoteComment || !comment.isOrphaned) continue;
+                // Prefer the OT-tracked position (follows edits); fall back to stored line/char.
+                const trackedPos = this.orphanedAt.get(comment.id);
                 try {
-                    const line = doc.line(comment.startLine + 1);
-                    const from = line.from + comment.startChar;
-                    const to   = Math.min(from + 1, line.to);
+                    const from = trackedPos !== undefined
+                        ? trackedPos
+                        : doc.line(comment.startLine + 1).from + comment.startChar;
+                    const to = Math.min(from + 1, doc.length);
                     if (from >= 0 && to <= doc.length && from < to) {
                         decorationsArray.push({
                             from, to,

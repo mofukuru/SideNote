@@ -5,11 +5,17 @@ export interface Comment {
     startChar: number;
     endLine: number;
     endChar: number;
+    // Absolute character offsets into the file content (Overleaf-style OT tracking).
+    // Set by the CM6 highlight plugin via ChangeSet.mapPos(); used as the fast-path
+    // for position recovery so re-searching the whole file is rarely needed.
+    startOffset?: number;
+    endOffset?: number;
     selectedText: string;
     selectedTextHash: string;
     comment: string;
     timestamp: number;
     isOrphaned?: boolean;
+    isNoteComment?: boolean;
     commentPath?: string;
     resolved?: boolean;
     resolvedAt?: number | null;
@@ -133,8 +139,8 @@ export class CommentManager {
         const escapedText = selectedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(escapedText, 'g');
 
-        const startLine = Math.max(0, hintStartLine - 10);
-        const endLine = Math.min(lines.length, hintEndLine + 10);
+        const startLine = Math.max(0, hintStartLine - 50);
+        const endLine = Math.min(lines.length, hintEndLine + 50);
 
         const candidates: { line: number; startChar: number; endChar: number; distance: number }[] = [];
 
@@ -246,29 +252,85 @@ export class CommentManager {
         const lines = fileContent.split('\n');
 
         for (const comment of fileComments) {
+            if (comment.isNoteComment) continue;
+
             if (comment.isOrphaned) {
-                // The CM6 highlight plugin (OT tracking) or a previous check already
-                // marked this orphaned.  Only recover if the text is back at the exact
-                // stored coordinates — this handles Ctrl+Z undo without searching elsewhere.
+                // Fast-path recovery via absolute offset (handles undo when OT tracked the position).
+                if (this.textAtOffsetMatches(fileContent, comment)) {
+                    this.syncLineCoordsFromOffset(fileContent, comment);
+                    comment.isOrphaned = false;
+                    continue;
+                }
+                // Fallback: exact line/char coords (original undo recovery path).
                 if (this.textAtCoordsMatches(lines, comment)) {
                     comment.isOrphaned = false;
                 }
-                // Either recovered above or stays orphaned — do not fall through to search.
                 continue;
             }
 
+            // Fast-path: absolute offsets set by the CM6 OT tracker are still valid.
+            if (this.textAtOffsetMatches(fileContent, comment)) {
+                this.syncLineCoordsFromOffset(fileContent, comment);
+                comment.isOrphaned = false;
+                continue;
+            }
+
+            // Slow-path: offset is stale (e.g. external sync) — re-search by hash.
             const newPosition = this.resolveCommentPosition(fileContent, comment);
 
             if (newPosition) {
-                comment.startLine = newPosition.line;
-                comment.startChar = newPosition.startChar;
-                comment.endLine = newPosition.line;
-                comment.endChar = newPosition.endChar;
-                comment.isOrphaned = false;
+                comment.startLine   = newPosition.line;
+                comment.startChar   = newPosition.startChar;
+                comment.endLine     = newPosition.line;
+                comment.endChar     = newPosition.endChar;
+                comment.startOffset = this.computeOffset(fileContent, newPosition.line, newPosition.startChar);
+                comment.endOffset   = comment.startOffset + comment.selectedText.length;
+                comment.isOrphaned  = false;
             } else {
                 comment.isOrphaned = true;
             }
         }
+    }
+
+    private textAtOffsetMatches(fileContent: string, comment: Comment): boolean {
+        if (
+            comment.startOffset === undefined ||
+            comment.endOffset === undefined ||
+            comment.startOffset < 0 ||
+            comment.endOffset > fileContent.length ||
+            comment.startOffset >= comment.endOffset
+        ) return false;
+        return fileContent.substring(comment.startOffset, comment.endOffset) === comment.selectedText;
+    }
+
+    private offsetToLineChar(fileContent: string, offset: number): { line: number; char: number } {
+        const lines = fileContent.split('\n');
+        let pos = 0;
+        for (let i = 0; i < lines.length; i++) {
+            const lineEnd = pos + lines[i].length;
+            if (offset <= lineEnd) return { line: i, char: offset - pos };
+            pos = lineEnd + 1; // +1 for \n
+        }
+        const last = lines.length - 1;
+        return { line: last, char: lines[last].length };
+    }
+
+    private syncLineCoordsFromOffset(fileContent: string, comment: Comment): void {
+        const start = this.offsetToLineChar(fileContent, comment.startOffset!);
+        const end   = this.offsetToLineChar(fileContent, comment.endOffset!);
+        comment.startLine = start.line;
+        comment.startChar = start.char;
+        comment.endLine   = end.line;
+        comment.endChar   = end.char;
+    }
+
+    private computeOffset(fileContent: string, line: number, char: number): number {
+        const lines = fileContent.split('\n');
+        let offset = 0;
+        for (let i = 0; i < line && i < lines.length; i++) {
+            offset += lines[i].length + 1; // +1 for \n
+        }
+        return offset + char;
     }
 
     private textAtCoordsMatches(lines: string[], comment: Comment): boolean {

@@ -24,6 +24,7 @@ export interface SideNotePlugin {
     readonly app: App;
     readonly settings: SideNoteSettings;
     readonly commentManager: CommentManager;
+    addComment(comment: Comment): Promise<void>;
     editComment(id: string, text: string): Promise<void>;
     deleteComment(id: string): void;
     resolveComment(id: string): Promise<void>;
