@@ -349,6 +349,39 @@
     background-color: var(--sidenote-highlight-hover, rgba(255, 200, 0, 0.35));
 }
 
+/* background only: remove underline */
+[data-sidenote-highlight-style="background"] .sidenote-highlight {
+    border-bottom: none;
+}
+
+/* underline only: remove background */
+[data-sidenote-highlight-style="underline"] .sidenote-highlight {
+    background-color: transparent;
+}
+[data-sidenote-highlight-style="underline"] .sidenote-highlight:hover {
+    background-color: transparent;
+}
+
+/* dashed underline only */
+[data-sidenote-highlight-style="dashed"] .sidenote-highlight {
+    background-color: transparent;
+    border-bottom: 2px dashed var(--sidenote-highlight-border, rgba(255, 200, 0, 0.6));
+}
+[data-sidenote-highlight-style="dashed"] .sidenote-highlight:hover {
+    background-color: transparent;
+}
+
+/* wavy underline only */
+[data-sidenote-highlight-style="wavy"] .sidenote-highlight {
+    background-color: transparent;
+    border-bottom: none;
+    text-decoration: underline wavy var(--sidenote-highlight-border, rgba(255, 200, 0, 0.6));
+    text-underline-offset: 3px;
+}
+[data-sidenote-highlight-style="wavy"] .sidenote-highlight:hover {
+    background-color: transparent;
+}
+
 .sidenote-highlight.orphaned {
     background-color: var(--sidenote-orphaned-color, rgba(255, 100, 100, 0.15));
     border-bottom: 2px dashed var(--sidenote-orphaned-border, rgba(255, 100, 100, 0.5));

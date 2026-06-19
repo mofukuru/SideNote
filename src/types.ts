@@ -5,12 +5,15 @@ export interface CustomViewState extends Record<string, unknown> {
     filePath: string | null;
 }
 
+export type HighlightStyle = "both" | "background" | "underline" | "dashed" | "wavy";
+
 export interface SideNoteSettings {
     commentSortOrder: "timestamp" | "position";
     showHighlights: boolean;
     markdownFolder: string;
     highlightColor: string;
     highlightOpacity: number;
+    highlightStyle: HighlightStyle;
     showResolvedComments: boolean;
 }
 
@@ -42,5 +45,6 @@ export const DEFAULT_SETTINGS: SideNoteSettings = {
     markdownFolder: "side-note-comments",
     highlightColor: "#FFC800",
     highlightOpacity: 0.2,
+    highlightStyle: "both",
     showResolvedComments: false,
 };

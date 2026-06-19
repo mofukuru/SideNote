@@ -376,7 +376,7 @@ export class SideNoteView extends ItemView {
 
         const viewHeader = this.containerEl.createDiv("sidenote-view-header");
         const toggleBtn = viewHeader.createEl("button", {
-            text: this.showAllNotes ? "Current File" : "All Notes",
+            text: this.showAllNotes ? "All Notes" : "Current File",
             cls: "sidenote-view-toggle",
         });
         toggleBtn.onclick = () => {

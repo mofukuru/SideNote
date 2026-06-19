@@ -357,6 +357,7 @@ export default class SideNote extends Plugin {
             markdownFolder: loadedData.markdownFolder || DEFAULT_SETTINGS.markdownFolder,
             highlightColor: loadedData.highlightColor || DEFAULT_SETTINGS.highlightColor,
             highlightOpacity: loadedData.highlightOpacity !== undefined ? loadedData.highlightOpacity : DEFAULT_SETTINGS.highlightOpacity,
+            highlightStyle: loadedData.highlightStyle || DEFAULT_SETTINGS.highlightStyle,
             showResolvedComments: loadedData.showResolvedComments !== undefined ? loadedData.showResolvedComments : DEFAULT_SETTINGS.showResolvedComments,
         };
         this.comments = loadedData.comments || [];
@@ -477,7 +478,7 @@ export default class SideNote extends Plugin {
 
     applyHighlightColor() {
         const root = document.documentElement;
-        const { highlightColor: color, highlightOpacity: opacity } = this.settings;
+        const { highlightColor: color, highlightOpacity: opacity, highlightStyle } = this.settings;
         const rgb = this.hexToRgb(color);
 
         root.style.setProperty('--sidenote-highlight-color', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`);
@@ -486,6 +487,7 @@ export default class SideNote extends Plugin {
         root.style.setProperty('--sidenote-orphaned-color', `rgba(255, 100, 100, ${opacity})`);
         root.style.setProperty('--sidenote-orphaned-hover', `rgba(255, 100, 100, ${Math.min(opacity + 0.15, 1)})`);
         root.style.setProperty('--sidenote-orphaned-border', `rgba(255, 100, 100, ${Math.min(opacity + 0.35, 1)})`);
+        root.setAttribute('data-sidenote-highlight-style', highlightStyle);
 
         this.refreshEditorDecorations();
     }

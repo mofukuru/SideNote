@@ -83,6 +83,24 @@ export class SideNoteSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
+            .setName("Highlight style")
+            .setDesc("Choose how commented text is marked in the editor")
+            .addDropdown((dropdown) =>
+                dropdown
+                    .addOption("both", "Underline + Background")
+                    .addOption("background", "Background only")
+                    .addOption("underline", "Underline only")
+                    .addOption("dashed", "Dashed underline only")
+                    .addOption("wavy", "Wavy underline only")
+                    .setValue(this.plugin.settings.highlightStyle || "both")
+                    .onChange(async (value: string) => {
+                        this.plugin.settings.highlightStyle = value as typeof this.plugin.settings.highlightStyle;
+                        await this.plugin.saveData();
+                        this.plugin.applyHighlightColor();
+                    })
+            );
+
+        new Setting(containerEl)
             .setName("Markdown comments folder")
             .setDesc("Folder (relative to vault) where sidenote markdown backup files are stored")
             .addText((text) =>

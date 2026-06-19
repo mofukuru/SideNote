@@ -11,7 +11,7 @@ SideNote is a plugin for [Obsidian](https://obsidian.md) that allows you to add 
 - **Dual View Modes**:
   - **Sidebar Mode**: Open comments in the right sidebar for persistent viewing
   - **Split View Mode**: Open comments in a split pane beside your note
-- **Visual Highlights**: Commented text is automatically highlighted in the editor (yellow background with underline)
+- **Visual Highlights**: Commented text is automatically highlighted in the editor with a configurable style (default: yellow background with underline)
 - **Auto-Tracking**: Comments automatically follow their text as you edit your notes using hash-based matching
 - **Click to Navigate**:
   - Click any comment in the side pane to jump to its location in the editor
@@ -45,7 +45,7 @@ SideNote is a plugin for [Obsidian](https://obsidian.md) that allows you to add 
 3. An inline form appears in the sidebar — type your comment there
    - Press `Cmd/Ctrl + Enter` to save
    - Press `Esc` to cancel
-4. The text will be automatically highlighted in yellow with an underline
+4. The text will be automatically highlighted using your configured style (default: yellow background with underline)
 
 ### Adding a Note Comment (no text selection)
 
@@ -91,8 +91,16 @@ Access settings via Settings → Side Note:
 
 - **Comment Sort Order**: Choose between position in file or timestamp
 - **Show Highlights in Editor**: Toggle visual highlights on/off
-- **Store Comments as Markdown Files**: Save comments into per-note sidenote markdown files
-- **Markdown Comments Folder**: Configure the folder (relative to vault) for sidenote markdown files
+- **Show Resolved Comments**: Show or hide resolved comments in the sidebar
+- **Highlight color**: Choose the color used to highlight commented text
+- **Highlight opacity**: Control how transparent the highlight is (0 = invisible, 1 = fully opaque)
+- **Highlight style**: Choose how commented text is marked in the editor:
+  - *Underline + Background* (default)
+  - *Background only*
+  - *Underline only*
+  - *Dashed underline only*
+  - *Wavy underline only*
+- **Markdown comments folder**: Configure the folder (relative to vault) for sidenote markdown files
 - **Orphaned Comments**: View count and delete orphaned comments in bulk
 
 ## Mobile Support
@@ -167,7 +175,7 @@ Access settings via Settings → Side Note:
 - Enable true multi-device annotation sync without conflicts, even when the same note is edited on multiple devices simultaneously while offline
 - Remove the remaining edge cases where identical text within the re-search window causes a comment to re-anchor to the wrong occurrence
 
-**Highlight Variations**: Plans to add customizable highlight colors and styles for different comment types.
+**Highlight Variations**: ~~Plans to add customizable highlight colors and styles~~ — Added in v1.0.9. Five styles available in settings.
 
 **Richer Editing UI**: Build a richer Markdown editing experience (shortcuts/preview) on top of the new markdown storage option.
 
@@ -181,6 +189,20 @@ Access settings via Settings → Side Note:
 - Uses CodeMirror 6 decorations for in-editor highlighting
 
 ## Version History
+
+### 1.0.9
+- **Fixed "Current File" / "All Notes" toggle showing the wrong mode label** (issue [#27](https://github.com/mofukuru/SideNote/issues))
+  - The button was displaying the *next* mode (where clicking would take you) instead of the *current* mode being shown — the opposite of what users expect
+  - Fixed: the button now always reflects the currently active view mode
+- **Added highlight style setting** (issue [#28](https://github.com/mofukuru/SideNote/issues))
+  - New **Highlight style** dropdown in Settings → Side Note with five options:
+    - *Underline + Background* (default — same as before)
+    - *Background only*
+    - *Underline only*
+    - *Dashed underline only*
+    - *Wavy underline only*
+  - Useful for users with many comments who find the combined underline + background visually cluttered
+  - Style works alongside the existing color and opacity settings
 
 ### 1.0.8
 - **Fixed comment navigation scroll position** — clicking a comment in the sidebar now reliably centers the highlighted text in the editor viewport
