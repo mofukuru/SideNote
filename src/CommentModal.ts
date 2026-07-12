@@ -3,7 +3,7 @@ import { bindModalActionHandlers } from "./core/modalActionBindings";
 import { SubmitExecutionGuard } from "./core/submitExecutionGuard";
 
 export class CommentModal extends Modal {
-    comment: string = "";
+    comment = "";
     private readonly onSubmit: (comment: string) => void | Promise<void>;
     private readonly initialComment: string;
     private textareaEl: HTMLTextAreaElement | null = null;

@@ -30,6 +30,19 @@ export class SideNoteSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
+            .setName("Reverse sort order")
+            .setDesc("Show comments in descending order (newest first / bottom of file first).")
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.commentSortDescending)
+                    .onChange(async (value: boolean) => {
+                        this.plugin.settings.commentSortDescending = value;
+                        await this.plugin.saveData();
+                        this.rerenderViews();
+                    })
+            );
+
+        new Setting(containerEl)
             .setName("Show highlights in editor")
             .setDesc("Display highlights for commented text in the editor. After changing this setting, please restart Obsidian to see the effect.")
             .addToggle((toggle) =>

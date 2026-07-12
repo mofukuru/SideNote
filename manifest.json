@@ -1,7 +1,7 @@
 {
 	"id": "side-note",
 	"name": "SideNote",
-	"version": "1.0.9",
+	"version": "1.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "Add comment on the part of sentence and refer in comment view.",
 	"author": "mofukuru",

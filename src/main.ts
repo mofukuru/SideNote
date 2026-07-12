@@ -353,6 +353,9 @@ export default class SideNote extends Plugin {
         const loadedData: PluginData = Object.assign({}, { comments: [] }, DEFAULT_SETTINGS, await this.loadData());
         this.settings = {
             commentSortOrder: loadedData.commentSortOrder || DEFAULT_SETTINGS.commentSortOrder,
+            commentSortDescending: loadedData.commentSortDescending !== undefined
+                ? loadedData.commentSortDescending
+                : DEFAULT_SETTINGS.commentSortDescending,
             showHighlights: loadedData.showHighlights !== undefined ? loadedData.showHighlights : DEFAULT_SETTINGS.showHighlights,
             markdownFolder: loadedData.markdownFolder || DEFAULT_SETTINGS.markdownFolder,
             highlightColor: loadedData.highlightColor || DEFAULT_SETTINGS.highlightColor,

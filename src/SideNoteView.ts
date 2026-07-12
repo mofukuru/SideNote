@@ -1,8 +1,9 @@
-import { ItemView, WorkspaceLeaf, TFile, MarkdownView, Notice, ViewStateResult, MarkdownRenderer, Scope } from "obsidian";
+import { ItemView, WorkspaceLeaf, TFile, MarkdownView, Notice, ViewStateResult, MarkdownRenderer, Scope, Platform, setIcon } from "obsidian";
 import type { SideNotePlugin } from "./types";
 import type { Comment } from "./commentManager";
 import type { CustomViewState } from "./types";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import { ConfirmDiscardModal } from "./ConfirmDiscardModal";
 import { generateCommentId } from "./utils";
 
 interface PendingAdd {
@@ -23,10 +24,21 @@ export class SideNoteView extends ItemView {
     private showAllNotes = false;
     private searchQuery = "";
     private editingCommentId: string | null = null;
-    private editingDraft: string = "";
+    private editingDraft = "";
     private pendingAdd: PendingAdd | null = null;
-    private pendingAddDraft: string = "";
+    private pendingAddDraft = "";
     private activeScope: Scope | null = null;
+    /** 次の描画で textarea にフォーカスを当てるか。ユーザーが明示的に編集を開始した時だけ true になる */
+    private focusOnNextRender = false;
+    private editingSelectionStart: number | null = null;
+    private editingSelectionEnd: number | null = null;
+    private pendingAddSelectionStart: number | null = null;
+    private pendingAddSelectionEnd: number | null = null;
+    /**
+     * 折りたたみ状態のユーザー操作による上書き。キーは comment.id。
+     * エントリがなければデフォルト(resolved なら折りたたみ)に従う。
+     */
+    private collapseOverrides = new Map<string, boolean>();
 
     constructor(leaf: WorkspaceLeaf, plugin: SideNotePlugin, file: TFile | null = null) {
         super(leaf);
@@ -91,14 +103,18 @@ export class SideNoteView extends ItemView {
         this.editingDraft = "";
         this.pendingAdd = info;
         this.pendingAddDraft = "";
+        this.pendingAddSelectionStart = null;
+        this.pendingAddSelectionEnd = null;
+        this.focusOnNextRender = true;
         this.renderComments();
-        setTimeout(() => {
-            this.containerEl.querySelector<HTMLTextAreaElement>('.sidenote-edit-textarea')?.focus();
-        }, 50);
     }
 
     private getFileTitle(filePath: string): string {
         return filePath.split("/").pop()?.replace(/\.md$/i, "") ?? "Note";
+    }
+
+    private isCollapsed(comment: Comment): boolean {
+        return this.collapseOverrides.get(comment.id) ?? comment.resolved ?? false;
     }
 
     private renderCommentItem(container: HTMLElement, comment: Comment) {
@@ -112,8 +128,19 @@ export class SideNoteView extends ItemView {
         const isEditing = this.editingCommentId === comment.id;
         if (isEditing) commentEl.addClass("sidenote-editing");
 
+        const collapsed = !isEditing && this.isCollapsed(comment);
+        if (collapsed) commentEl.addClass("sidenote-collapsed");
+
         // --- Header (always visible) ---
         const headerEl = commentEl.createDiv("sidenote-comment-header");
+        const collapseBtn = headerEl.createEl("button", { cls: "sidenote-collapse-button" });
+        setIcon(collapseBtn, collapsed ? "chevron-right" : "chevron-down");
+        collapseBtn.setAttribute("aria-label", collapsed ? "Expand comment" : "Collapse comment");
+        collapseBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.collapseOverrides.set(comment.id, !collapsed);
+            this.renderComments();
+        });
         const textInfoEl = headerEl.createDiv("sidenote-comment-text-info");
         textInfoEl.createEl("h4", {
             text: comment.isNoteComment ? this.getFileTitle(comment.filePath) : comment.selectedText,
@@ -174,10 +201,15 @@ export class SideNoteView extends ItemView {
 
         // --- Double click: enter inline edit mode ---
         commentEl.addEventListener('dblclick', (event) => {
+            if (isEditing) return;
             if ((event.target as HTMLElement)?.closest('a')) return;
             event.stopPropagation();
+            this.collapseOverrides.set(comment.id, false);
             this.editingCommentId = comment.id;
             this.editingDraft = comment.comment;
+            this.editingSelectionStart = null;
+            this.editingSelectionEnd = null;
+            this.focusOnNextRender = true;
             this.renderComments();
         });
 
@@ -185,15 +217,29 @@ export class SideNoteView extends ItemView {
             // --- Inline edit form ---
             this.renderInlineEditForm(
                 commentEl,
+                comment.filePath,
                 async (text) => {
                     this.editingCommentId = null;
                     this.editingDraft = "";
+                    this.editingSelectionStart = null;
+                    this.editingSelectionEnd = null;
                     await this.plugin.editComment(comment.id, text);
                 },
                 () => {
-                    this.editingCommentId = null;
-                    this.editingDraft = "";
-                    this.renderComments();
+                    const discard = () => {
+                        this.editingCommentId = null;
+                        this.editingDraft = "";
+                        this.editingSelectionStart = null;
+                        this.editingSelectionEnd = null;
+                        this.renderComments();
+                    };
+                    if (this.editingDraft !== comment.comment) {
+                        new ConfirmDiscardModal(this.app, discard, () => {
+                            commentEl.querySelector<HTMLTextAreaElement>('.sidenote-edit-textarea')?.focus();
+                        }).open();
+                    } else {
+                        discard();
+                    }
                 }
             );
         } else {
@@ -206,8 +252,12 @@ export class SideNoteView extends ItemView {
             editOption.onclick = (e) => {
                 e.stopPropagation();
                 menuContainer.classList.remove("visible");
+                this.collapseOverrides.set(comment.id, false);
                 this.editingCommentId = comment.id;
                 this.editingDraft = comment.comment;
+                this.editingSelectionStart = null;
+                this.editingSelectionEnd = null;
+                this.focusOnNextRender = true;
                 this.renderComments();
             };
 
@@ -225,6 +275,7 @@ export class SideNoteView extends ItemView {
             resolveOption.onclick = (e) => {
                 e.stopPropagation();
                 menuContainer.classList.remove("visible");
+                this.collapseOverrides.delete(comment.id);
                 if (comment.resolved) {
                     this.plugin.unresolveComment(comment.id);
                 } else {
@@ -237,27 +288,29 @@ export class SideNoteView extends ItemView {
                 menuContainer.classList.toggle("visible");
             };
 
-            // --- Rendered comment content ---
-            // markdown-rendered is required so Obsidian's CSS scopes (blockquote,
-            // callout, etc.) resolve correctly inside a custom ItemView.
-            const contentWrapper = commentEl.createDiv({ cls: "sidenote-comment-content markdown-rendered" });
-            const commentText = comment.comment || "";
-            void MarkdownRenderer.render(this.app, commentText, contentWrapper, comment.filePath, this);
+            if (!collapsed) {
+                // --- Rendered comment content ---
+                // markdown-rendered is required so Obsidian's CSS scopes (blockquote,
+                // callout, etc.) resolve correctly inside a custom ItemView.
+                const contentWrapper = commentEl.createDiv({ cls: "sidenote-comment-content markdown-rendered" });
+                const commentText = comment.comment || "";
+                void MarkdownRenderer.render(this.app, commentText, contentWrapper, comment.filePath, this);
 
-            // Custom ItemView context: Obsidian's workspace-level link handler does not fire here.
-            contentWrapper.addEventListener('click', (e: MouseEvent) => {
-                const linkEl = (e.target as HTMLElement).closest('a') as HTMLAnchorElement | null;
-                if (!linkEl) return;
-                e.preventDefault();
-                e.stopPropagation();
-                const href = linkEl.getAttribute('data-href') || linkEl.getAttribute('href') || '';
-                if (!href) return;
-                if (/^[a-z][a-z0-9+\-.]*:\/\//i.test(href)) {
-                    window.open(href, '_blank');
-                    return;
-                }
-                this.app.workspace.openLinkText(href, comment.filePath, e.ctrlKey || e.metaKey);
-            });
+                // Custom ItemView context: Obsidian's workspace-level link handler does not fire here.
+                contentWrapper.addEventListener('click', (e: MouseEvent) => {
+                    const linkEl = (e.target as HTMLElement).closest('a') as HTMLAnchorElement | null;
+                    if (!linkEl) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const href = linkEl.getAttribute('data-href') || linkEl.getAttribute('href') || '';
+                    if (!href) return;
+                    if (/^[a-z][a-z0-9+\-.]*:\/\//i.test(href)) {
+                        window.open(href, '_blank');
+                        return;
+                    }
+                    this.app.workspace.openLinkText(href, comment.filePath, e.ctrlKey || e.metaKey);
+                });
+            }
         }
     }
 
@@ -282,15 +335,67 @@ export class SideNoteView extends ItemView {
         }
     }
 
+    private renderShortcutHint(form: HTMLElement): void {
+        const modKey = Platform.isMacOS ? "⌘" : "Ctrl";
+        form.createEl("div", {
+            text: `${modKey}+Enter to save · Esc to cancel`,
+            cls: "sidenote-edit-hint",
+        });
+    }
+
+    /** filePath を開いている Markdown エディタの現在の選択テキストを返す(なければ null) */
+    private getEditorSelection(filePath: string): string | null {
+        let selection: string | null = null;
+        this.app.workspace.iterateAllLeaves((leaf) => {
+            if (leaf.view instanceof MarkdownView && leaf.view.file?.path === filePath) {
+                const text = leaf.view.editor.getSelection();
+                if (text) selection = text;
+            }
+        });
+        return selection;
+    }
+
+    private insertQuoteIntoTextarea(
+        textarea: HTMLTextAreaElement,
+        filePath: string,
+        syncDraft: (value: string) => void,
+    ): void {
+        const selection = this.getEditorSelection(filePath);
+        if (!selection || !selection.trim()) {
+            new Notice("Select text in the note first.");
+            return;
+        }
+        const quote = selection.split("\n").map(line => `> ${line}`).join("\n");
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const before = textarea.value.slice(0, start);
+        const after = textarea.value.slice(end);
+        const prefix = before && !before.endsWith("\n") ? "\n" : "";
+        const inserted = `${prefix}${quote}\n`;
+        textarea.value = before + inserted + after;
+        syncDraft(textarea.value);
+        const caret = (before + inserted).length;
+        textarea.focus();
+        textarea.setSelectionRange(caret, caret);
+    }
+
     private renderInlineEditForm(
         container: HTMLElement,
+        filePath: string,
         onSave: (text: string) => Promise<void>,
         onCancel: () => void,
     ) {
         const form = container.createDiv({ cls: "sidenote-edit-form" });
         const textarea = form.createEl("textarea", { cls: "sidenote-edit-textarea" });
         textarea.value = this.editingDraft;
-        textarea.addEventListener('input', () => { this.editingDraft = textarea.value; });
+        if (this.editingSelectionStart !== null && this.editingSelectionEnd !== null) {
+            textarea.setSelectionRange(this.editingSelectionStart, this.editingSelectionEnd);
+        }
+        textarea.addEventListener('input', () => {
+            this.editingDraft = textarea.value;
+            this.editingSelectionStart = textarea.selectionStart;
+            this.editingSelectionEnd = textarea.selectionEnd;
+        });
 
         const doSave = async () => {
             const text = this.editingDraft.trim();
@@ -301,17 +406,30 @@ export class SideNoteView extends ItemView {
         this.pushEditScope(() => void doSave(), onCancel);
 
         const actionsDiv = form.createDiv({ cls: "sidenote-edit-actions" });
+        const quoteBtn = actionsDiv.createEl("button", { text: "Quote selection", cls: "sidenote-edit-quote" });
         const saveBtn = actionsDiv.createEl("button", { text: "Save", cls: "mod-cta sidenote-edit-save" });
         const cancelBtn = actionsDiv.createEl("button", { text: "Cancel", cls: "sidenote-edit-cancel" });
 
+        quoteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.insertQuoteIntoTextarea(textarea, filePath, (value) => {
+                this.editingDraft = value;
+                this.editingSelectionStart = textarea.selectionStart;
+                this.editingSelectionEnd = textarea.selectionEnd;
+            });
+        });
         saveBtn.addEventListener('click', (e) => { e.stopPropagation(); void doSave(); });
         cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); onCancel(); });
+        this.renderShortcutHint(form);
 
-        setTimeout(() => {
-            textarea.focus();
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-            container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 30);
+        if (this.focusOnNextRender) {
+            this.focusOnNextRender = false;
+            setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 30);
+        }
     }
 
     private renderInlineAddForm(container: HTMLElement) {
@@ -326,7 +444,14 @@ export class SideNoteView extends ItemView {
             attr: { placeholder: "Write your comment…" },
         });
         textarea.value = this.pendingAddDraft;
-        textarea.addEventListener('input', () => { this.pendingAddDraft = textarea.value; });
+        if (this.pendingAddSelectionStart !== null && this.pendingAddSelectionEnd !== null) {
+            textarea.setSelectionRange(this.pendingAddSelectionStart, this.pendingAddSelectionEnd);
+        }
+        textarea.addEventListener('input', () => {
+            this.pendingAddDraft = textarea.value;
+            this.pendingAddSelectionStart = textarea.selectionStart;
+            this.pendingAddSelectionEnd = textarea.selectionEnd;
+        });
 
         const saveNew = async () => {
             const text = this.pendingAddDraft.trim();
@@ -352,21 +477,57 @@ export class SideNoteView extends ItemView {
         };
 
         const cancelNew = () => {
-            this.pendingAdd = null;
-            this.pendingAddDraft = "";
-            this.renderComments();
+            const discard = () => {
+                this.pendingAdd = null;
+                this.pendingAddDraft = "";
+                this.pendingAddSelectionStart = null;
+                this.pendingAddSelectionEnd = null;
+                this.renderComments();
+            };
+            if (this.pendingAddDraft.trim() !== "") {
+                new ConfirmDiscardModal(this.app, discard, () => textarea.focus()).open();
+            } else {
+                discard();
+            }
         };
 
         this.pushEditScope(() => void saveNew(), cancelNew);
 
         const actionsDiv = form.createDiv({ cls: "sidenote-edit-actions" });
+        const quoteBtn = actionsDiv.createEl("button", { text: "Quote selection", cls: "sidenote-edit-quote" });
         const addBtn = actionsDiv.createEl("button", { text: "Add", cls: "mod-cta sidenote-edit-save" });
         const cancelBtn = actionsDiv.createEl("button", { text: "Cancel", cls: "sidenote-edit-cancel" });
 
+        quoteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.insertQuoteIntoTextarea(textarea, pa.filePath, (value) => {
+                this.pendingAddDraft = value;
+                this.pendingAddSelectionStart = textarea.selectionStart;
+                this.pendingAddSelectionEnd = textarea.selectionEnd;
+            });
+        });
         addBtn.addEventListener('click', (e) => { e.stopPropagation(); void saveNew(); });
         cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cancelNew(); });
+        this.renderShortcutHint(form);
 
-        setTimeout(() => textarea.focus(), 30);
+        if (this.focusOnNextRender) {
+            this.focusOnNextRender = false;
+            setTimeout(() => textarea.focus(), 30);
+        }
+    }
+
+    /** 設定に従ってコメント配列をその場でソートする */
+    private sortComments(comments: Comment[]): void {
+        if (this.plugin.settings.commentSortOrder === "position") {
+            comments.sort((a, b) =>
+                a.startLine !== b.startLine ? a.startLine - b.startLine : a.startChar - b.startChar
+            );
+        } else {
+            comments.sort((a, b) => a.timestamp - b.timestamp);
+        }
+        if (this.plugin.settings.commentSortDescending) {
+            comments.reverse();
+        }
     }
 
     public renderComments() {
@@ -425,13 +586,7 @@ export class SideNoteView extends ItemView {
                 );
             }
 
-            if (this.plugin.settings.commentSortOrder === "position") {
-                commentsForFile.sort((a, b) =>
-                    a.startLine !== b.startLine ? a.startLine - b.startLine : a.startChar - b.startChar
-                );
-            } else {
-                commentsForFile.sort((a, b) => a.timestamp - b.timestamp);
-            }
+            this.sortComments(commentsForFile);
 
             const commentsContainer = this.containerEl.createDiv("sidenote-comments-container");
 
@@ -497,11 +652,7 @@ export class SideNoteView extends ItemView {
             fileSection.createEl("h3", { text: fileName, cls: "sidenote-file-heading" });
 
             const sorted = [...comments];
-            if (this.plugin.settings.commentSortOrder === "position") {
-                sorted.sort((a, b) => a.startLine !== b.startLine ? a.startLine - b.startLine : a.startChar - b.startChar);
-            } else {
-                sorted.sort((a, b) => a.timestamp - b.timestamp);
-            }
+            this.sortComments(sorted);
 
             for (const comment of sorted) {
                 this.renderCommentItem(fileSection, comment);

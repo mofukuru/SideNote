@@ -9,6 +9,7 @@ export type HighlightStyle = "both" | "background" | "underline" | "dashed" | "w
 
 export interface SideNoteSettings {
     commentSortOrder: "timestamp" | "position";
+    commentSortDescending: boolean;
     showHighlights: boolean;
     markdownFolder: string;
     highlightColor: string;
@@ -41,6 +42,7 @@ export interface SideNotePlugin {
 
 export const DEFAULT_SETTINGS: SideNoteSettings = {
     commentSortOrder: "position",
+    commentSortDescending: false,
     showHighlights: true,
     markdownFolder: "side-note-comments",
     highlightColor: "#FFC800",

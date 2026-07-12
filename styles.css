@@ -149,6 +149,13 @@
     margin-top: 6px;
 }
 
+.sidenote-edit-hint {
+    font-size: var(--font-ui-smaller);
+    color: var(--text-faint);
+    margin-top: 4px;
+    text-align: right;
+}
+
 .sidenote-edit-save {
     padding: 4px 14px;
     background-color: var(--interactive-accent);
@@ -178,6 +185,22 @@
     color: var(--text-normal);
 }
 
+.sidenote-edit-quote {
+    padding: 4px 14px;
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    margin-right: auto;
+}
+
+.sidenote-edit-quote:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
 .sidenote-comment-header {
     display: flex;
     justify-content: space-between;
@@ -189,6 +212,31 @@
 .sidenote-comment-text-info {
     flex-grow: 1;
     min-width: 0; /* flexアイテムの縮小を許可 */
+}
+
+.sidenote-collapse-button {
+    background: none !important;
+    border: none !important;
+    /* box-shadow: none !important; */
+    padding: 4px;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.sidenote-collapse-button:hover {
+    background-color: var(--background-modifier-hover) !important;
+    color: var(--text-accent);
+}
+
+.sidenote-comment-item.sidenote-collapsed .sidenote-comment-header {
+    margin-bottom: 0;
 }
 
 .sidenote-selected-text {
@@ -489,7 +537,8 @@
         min-width: 32px;
     }
 
-    .sidenote-menu-button {
+    .sidenote-menu-button,
+    .sidenote-collapse-button {
         width: 32px;
         height: 32px;
         padding: 4px !important;

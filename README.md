@@ -19,9 +19,12 @@ SideNote is a plugin for [Obsidian](https://obsidian.md) that allows you to add 
   - Click any highlighted text in the editor to open the sidebar and highlight the corresponding comment
 - **Internal Link Support**: `[[WikiLinks]]` inside comment text are fully clickable and open the linked note
 - **Search Filter**: Filter comments in real time by typing in the search bar at the top of the sidebar (matches highlighted text and comment body; works in both Current File and All Notes views)
-- **Inline Editing**: Add and edit comments directly in the sidebar via an inline textarea — no popup modal. `Cmd/Ctrl + Enter` saves, `Esc` cancels.
+- **Inline Editing**: Add and edit comments directly in the sidebar via an inline textarea — no popup modal. `Cmd/Ctrl + Enter` saves, `Esc` cancels (both shown as an on-screen hint while editing).
+- **Quote Selection**: While editing a comment, click "Quote selection" to insert the text currently selected in the note as a blockquote at the cursor position
+- **Unsaved Changes Protection**: Canceling an edit with unsaved changes prompts a confirmation dialog so drafts are never discarded by accident
+- **Collapsible Comments**: Collapse or expand individual comments with the chevron button; resolved comments are collapsed by default to keep the list compact
 - **Edit and Delete**: Manage your comments directly from the side pane
-- **Flexible Sorting**: Sort comments by their position in the file or by their creation timestamp
+- **Flexible Sorting**: Sort comments by their position in the file or by their creation timestamp, with an optional reverse (descending) order
 - **Orphaned Comment Management**: When the original text is deleted, comments are marked as "orphaned" and can be managed separately
 
 ### Advanced Features
@@ -81,15 +84,17 @@ Type in the search bar at the top of the Side Note panel to filter comments in r
 
 ### Managing Comments
 
-- **Edit**: Click the `...` menu → Edit, or **double-click** the comment — an inline textarea opens in the sidebar. `Cmd/Ctrl + Enter` saves, `Esc` cancels.
+- **Edit**: Click the `...` menu → Edit, or **double-click** the comment — an inline textarea opens in the sidebar. `Cmd/Ctrl + Enter` saves, `Esc` cancels. While editing, the note body remains freely selectable — select text and use "Quote selection" to insert it as a blockquote, or copy/paste it directly.
 - **Delete**: Click the `...` menu → Delete
-- **Sort**: Change sort order in Settings → Comment sort order (by position or timestamp)
+- **Collapse / Expand**: Click the chevron next to a comment's title to hide or show its body
+- **Sort**: Change sort order in Settings → Comment sort order (by position or timestamp, ascending or descending)
 
 ### Settings
 
 Access settings via Settings → Side Note:
 
 - **Comment Sort Order**: Choose between position in file or timestamp
+- **Reverse Sort Order**: Show comments in descending order (newest first / bottom of file first)
 - **Show Highlights in Editor**: Toggle visual highlights on/off
 - **Show Resolved Comments**: Show or hide resolved comments in the sidebar
 - **Highlight color**: Choose the color used to highlight commented text
@@ -189,6 +194,20 @@ Access settings via Settings → Side Note:
 - Uses CodeMirror 6 decorations for in-editor highlighting
 
 ## Version History
+
+### 1.1.0
+- **Fixed focus being forced back into the comment editor on every re-render**
+  - While editing a comment, the sidebar re-renders on events like switching the active leaf or editing the note body. `textarea.focus()` was called unconditionally on every render, which repeatedly stole focus away from the note and made it impossible to select or copy text from the note body while a comment was open
+  - Fixed: the textarea is now only focused when you explicitly start an edit (double-click, the `...` menu → Edit, or "Add comment"), not on every re-render. The note body can now be freely selected while editing a comment
+  - The cursor position and text selection inside the comment textarea are also now preserved across re-renders instead of resetting
+- **Fixed double-click inside the textarea discarding in-progress edits**
+  - Double-clicking inside the edit textarea to select a word (normal browser behavior) was also caught by the outer "double-click to edit" handler, which reset the draft back to the saved comment text and discarded anything typed so far
+  - Fixed: double-click no longer re-enters edit mode while a comment is already being edited
+- **Added "Quote selection"** — while editing a comment, insert the text currently selected in the note as a blockquote at the cursor position
+- **Added a confirmation dialog before discarding unsaved edits** — canceling (via Esc or the Cancel button) with unsaved changes now asks before discarding the draft
+- **Added collapsible comments** — collapse or expand individual comments via a chevron button; resolved comments are collapsed by default
+- **Added reverse sort order** — a new "Reverse sort order" setting shows comments newest-first / bottom-of-file-first
+- **Added a keyboard shortcut hint** (`Ctrl+Enter` / `⌘+Enter` to save, `Esc` to cancel) shown in the edit and add-comment forms
 
 ### 1.0.9
 - **Fixed "Current File" / "All Notes" toggle showing the wrong mode label** (issue [#27](https://github.com/mofukuru/SideNote/issues))
