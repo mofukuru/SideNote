@@ -23,3 +23,5 @@ data.json
 
 # Test build output
 .test-dist
+
+bun.lock
