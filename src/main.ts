@@ -15,6 +15,15 @@ export default class SideNote extends Plugin {
     private editorUpdateTimers: Record<string, number> = {};
     private readonly duplicateAddWindowMs = 800;
     private lastAddFingerprint: { key: string; at: number } | null = null;
+    // Poll because external edits under .obsidian may not reliably emit a vault
+    // modify event, even though SideNote still needs to reload data.json.
+    private readonly dataReloadIntervalMs = 2000;
+    // Remember the last loaded/saved data shape so unchanged polling ticks no-op.
+    private lastDataFingerprint: string | null = null;
+    // Avoid treating SideNote's own saveData() writes as external changes.
+    private isSavingData = false;
+    // Avoid overlapping reloads from the timer and vault modify event.
+    private isReloadingData = false;
 
     private registerFreshSettingTab(): void {
         const appWithSettings = this.app as App & {
@@ -159,6 +168,14 @@ export default class SideNote extends Plugin {
             this.activateView();
         });
 
+        this.registerInterval(
+            // External tools can update .obsidian/plugins/side-note/data.json
+            // without Obsidian notifying this plugin, so poll as a fallback.
+            window.setInterval(() => {
+                void this.reloadDataFromDisk();
+            }, this.dataReloadIntervalMs)
+        );
+
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', (leaf) => {
                 if (leaf && leaf.view instanceof MarkdownView) {
@@ -190,12 +207,7 @@ export default class SideNote extends Plugin {
                 if (file.path === '.obsidian/plugins/side-note/data.json' ||
                     (file instanceof TFile && file.name === 'data.json' && file.parent?.name === 'side-note')) {
                     try {
-                        await this.loadPluginData();
-                        await this.migrateComments();
-                        this.commentManager.updateComments(this.comments);
-                        this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
-                            if (leaf.view instanceof SideNoteView) leaf.view.renderComments();
-                        });
+                        await this.reloadDataFromDisk();
                     } catch (error) {
                         console.error("Error reloading plugin data:", error);
                     }
@@ -349,6 +361,35 @@ export default class SideNote extends Plugin {
         });
     }
 
+    private getDataFingerprint(data: PluginData): string {
+        // Helper function for readability in code. //
+        return JSON.stringify(data);
+    }
+
+    private async reloadDataFromDisk(): Promise<boolean> {
+        // Skip reloads while saving or while another reload is in progress so
+        // SideNote does not race with itself.
+        if (this.isSavingData || this.isReloadingData) return false;
+
+        this.isReloadingData = true;
+        try {
+            const loadedData: PluginData = Object.assign({}, { comments: [] }, DEFAULT_SETTINGS, await this.loadData());
+            const fingerprint = this.getDataFingerprint(loadedData);
+            if (fingerprint === this.lastDataFingerprint) return false;
+
+            await this.loadPluginData();
+            await this.migrateComments();
+            this.commentManager.updateComments(this.comments);
+            this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
+                if (leaf.view instanceof SideNoteView) leaf.view.renderComments();
+            });
+            this.refreshEditorDecorations();
+            return true;
+        } finally {
+            this.isReloadingData = false;
+        }
+    }
+
     async loadPluginData() {
         const loadedData: PluginData = Object.assign({}, { comments: [] }, DEFAULT_SETTINGS, await this.loadData());
         this.settings = {
@@ -365,6 +406,7 @@ export default class SideNote extends Plugin {
         };
         this.comments = loadedData.comments || [];
         this.applyHighlightColor();
+        this.lastDataFingerprint = this.getDataFingerprint(loadedData);
     }
 
     async migrateComments() {
@@ -504,8 +546,14 @@ export default class SideNote extends Plugin {
 
     async saveData() {
         const dataToSave: PluginData = { ...this.settings, comments: this.comments };
-        await super.saveData(dataToSave);
-        this.refreshEditorDecorations();
+        this.isSavingData = true;
+        try {
+            await super.saveData(dataToSave);
+            this.lastDataFingerprint = this.getDataFingerprint(dataToSave);
+            this.refreshEditorDecorations();
+        } finally {
+            this.isSavingData = false;
+        }
     }
 
     refreshEditorDecorations() {
