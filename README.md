@@ -195,6 +195,14 @@ Access settings via Settings → Side Note:
 
 ## Version History
 
+### 1.1.1
+- **Fixed orphaned comments never re-highlighting even when their text still exists**
+  - When a comment was orphaned, its stored offsets and line/character coordinates are collapsed to a single point. Coordinate recovery for orphaned comments only tried an exact offset match and an exact line/char match — both of which always fail after the collapse — and never fell back to a text search. As a result, comments stayed orphaned (no highlight) forever, even when the selected text was still present in the note. Newly added comments highlighted correctly, so the problem only affected pre-existing comments
+  - Fixed: orphaned comments are now recovered by searching the whole document for their exact selected text (verified against the stored SHA256 hash). When the same text appears more than once, the occurrence closest to the comment's last-known position is chosen. Text that was genuinely deleted, or selections shorter than 3 characters, correctly stay orphaned
+- **Highlights now recover when a note is opened, not only when it is edited**
+  - Coordinate recovery previously ran only on the file `modify` event, so reopening a note with stale/orphaned comments did not restore their highlights until the note was edited. Recovery now also runs on `active-leaf-change`, and the note is re-saved only when a comment actually changed
+- **Kept collapsed-orphan coordinates internally consistent** — when a comment is orphaned, its `endLine`/`endChar` are now updated alongside `startLine`/`startChar` instead of retaining stale values, so later recovery is not misled
+
 ### 1.1.0
 - **Fixed focus being forced back into the comment editor on every re-render**
   - While editing a comment, the sidebar re-renders on events like switching the active leaf or editing the note body. `textarea.focus()` was called unconditionally on every render, which repeatedly stole focus away from the note and made it impossible to select or copy text from the note body while a comment was open

@@ -247,9 +247,12 @@ export class CommentManager {
         return { line, startChar, endChar };
     }
 
-    updateCommentCoordinatesForFile(fileContent: string, filePath: string): void {
+    // Returns true if any comment's stored data was changed, so callers can decide
+    // whether a save is needed.
+    updateCommentCoordinatesForFile(fileContent: string, filePath: string): boolean {
         const fileComments = this.comments.filter(c => c.filePath === filePath);
         const lines = fileContent.split('\n');
+        let changed = false;
 
         for (const comment of fileComments) {
             if (comment.isNoteComment) continue;
@@ -259,11 +262,22 @@ export class CommentManager {
                 if (this.textAtOffsetMatches(fileContent, comment)) {
                     this.syncLineCoordsFromOffset(fileContent, comment);
                     comment.isOrphaned = false;
+                    changed = true;
                     continue;
                 }
                 // Fallback: exact line/char coords (original undo recovery path).
                 if (this.textAtCoordsMatches(lines, comment)) {
                     comment.isOrphaned = false;
+                    changed = true;
+                    continue;
+                }
+                // Last resort: the selected text may still exist elsewhere in the file.
+                // When a comment is orphaned its offset/coords are collapsed to a single
+                // point, so the two fast paths above cannot find it even though the text
+                // is still present. Search the whole document for the exact text and
+                // recover the comment if a match is found.
+                if (this.recoverOrphanByExactText(fileContent, comment)) {
+                    changed = true;
                 }
                 continue;
             }
@@ -286,10 +300,53 @@ export class CommentManager {
                 comment.startOffset = this.computeOffset(fileContent, newPosition.line, newPosition.startChar);
                 comment.endOffset   = comment.startOffset + comment.selectedText.length;
                 comment.isOrphaned  = false;
+                changed = true;
             } else {
                 comment.isOrphaned = true;
+                changed = true;
             }
         }
+        return changed;
+    }
+
+    // Recovers an orphaned comment by locating its exact selected text anywhere in the
+    // file. An exact string match already implies identical content; the hash check is
+    // defense-in-depth. When the text appears more than once, the occurrence closest to
+    // the comment's last-known offset wins, so nearby duplicates are preferred.
+    private recoverOrphanByExactText(fileContent: string, comment: Comment): boolean {
+        const text = comment.selectedText;
+        if (!text || text.length < this.MIN_TEXT_LENGTH) return false;
+
+        const hint = comment.startOffset ?? 0;
+        let bestStart = -1;
+        let bestDistance = Infinity;
+        for (let idx = fileContent.indexOf(text); idx !== -1; idx = fileContent.indexOf(text, idx + 1)) {
+            const distance = Math.abs(idx - hint);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestStart = idx;
+            }
+        }
+        if (bestStart === -1) return false;
+
+        const startOffset = bestStart;
+        const endOffset = bestStart + text.length;
+
+        if (comment.selectedTextHash &&
+            this.generateHash(fileContent.substring(startOffset, endOffset)) !== comment.selectedTextHash) {
+            return false;
+        }
+
+        const start = this.offsetToLineChar(fileContent, startOffset);
+        const end   = this.offsetToLineChar(fileContent, endOffset);
+        comment.startOffset = startOffset;
+        comment.endOffset   = endOffset;
+        comment.startLine   = start.line;
+        comment.startChar   = start.char;
+        comment.endLine     = end.line;
+        comment.endChar     = end.char;
+        comment.isOrphaned  = false;
+        return true;
     }
 
     private textAtOffsetMatches(fileContent: string, comment: Comment): boolean {

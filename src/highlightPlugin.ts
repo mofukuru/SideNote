@@ -156,6 +156,10 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
                             const sl = doc.lineAt(orphanPos);
                             comment.startLine = sl.number - 1;
                             comment.startChar = orphanPos - sl.from;
+                            // Keep end coords consistent with the collapsed point so later
+                            // recovery isn't misled by stale end line/char values.
+                            comment.endLine = sl.number - 1;
+                            comment.endChar = orphanPos - sl.from;
                         }
                     }
                 }
@@ -189,6 +193,8 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
                         const sl = doc.lineAt(newPos);
                         comment.startLine = sl.number - 1;
                         comment.startChar = newPos - sl.from;
+                        comment.endLine = sl.number - 1;
+                        comment.endChar = newPos - sl.from;
                     }
                 }
 

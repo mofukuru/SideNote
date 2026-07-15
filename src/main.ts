@@ -177,9 +177,22 @@ export default class SideNote extends Plugin {
         );
 
         this.registerEvent(
-            this.app.workspace.on('active-leaf-change', (leaf) => {
+            this.app.workspace.on('active-leaf-change', async (leaf) => {
                 if (leaf && leaf.view instanceof MarkdownView) {
                     const file = leaf.view.file;
+                    // Recover comments whose selected text still exists but were left
+                    // orphaned/stale in a previous session, so highlights reappear on open
+                    // instead of only after the note is edited.
+                    if (file instanceof TFile && file.extension === 'md' &&
+                        this.commentManager.getCommentsForFile(file.path).length > 0) {
+                        try {
+                            const content = await this.app.vault.read(file);
+                            const changed = this.commentManager.updateCommentCoordinatesForFile(content, file.path);
+                            if (changed) await this.saveData();
+                        } catch (error) {
+                            console.error("Error recovering comment coordinates:", error);
+                        }
+                    }
                     this.app.workspace.getLeavesOfType("sidenote-view").forEach(sideNoteLeaf => {
                         if (sideNoteLeaf.view instanceof SideNoteView) {
                             sideNoteLeaf.view.updateActiveFile(file);
