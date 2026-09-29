@@ -142,6 +142,15 @@ export default class SideNote extends Plugin {
             },
         });
 
+        this.addCommand({
+            id: "highlight-selection",
+            name: "Highlight selection (without comment)",
+            icon: "highlighter",
+            editorCallback: (editor, view) => {
+                void this.highlightSelection(editor, view.file?.path);
+            },
+        });
+
         this.registerEvent(
             this.app.workspace.on('editor-menu', (menu, editor, view) => {
                 if (editor.somethingSelected()) {
@@ -149,6 +158,11 @@ export default class SideNote extends Plugin {
                         item.setTitle("Add comment to selection")
                             .setIcon("message-square")
                             .onClick(() => this.openAddCommentModal(editor, view.file?.path));
+                    });
+                    menu.addItem((item) => {
+                        item.setTitle("Highlight selection")
+                            .setIcon("highlighter")
+                            .onClick(() => this.highlightSelection(editor, view.file?.path));
                     });
                 } else {
                     menu.addItem((item) => {
@@ -295,7 +309,7 @@ export default class SideNote extends Plugin {
         ].join("|");
     }
 
-    async addComment(newComment: Comment) {
+    async addComment(newComment: Comment, message = "Comment added!") {
         const now = Date.now();
         const fingerprint = this.createAddFingerprint(newComment);
         if (
@@ -307,7 +321,7 @@ export default class SideNote extends Plugin {
         }
         this.lastAddFingerprint = { key: fingerprint, at: now };
         this.commentManager.addComment(newComment);
-        await this.onCommentsChanged("Comment added!");
+        await this.onCommentsChanged(message);
     }
 
     async editComment(commentId: string, newCommentText: string) {
@@ -330,30 +344,52 @@ export default class SideNote extends Plugin {
         await this.onCommentsChanged("Comment reopened!");
     }
 
-    private async openAddCommentModal(editor: Editor, filePath: string | undefined) {
+    private async getSelectionTarget(editor: Editor, filePath: string | undefined) {
         const selection = editor.getSelection();
-        if (!selection?.trim() || !filePath) {
+        if (!selection?.trim() || !filePath) return null;
+        const cursorStart = editor.getCursor("from");
+        const cursorEnd = editor.getCursor("to");
+        return {
+            filePath,
+            isNoteComment: false,
+            selectedText: selection,
+            selectedTextHash: await generateHash(selection),
+            startLine: cursorStart.line,
+            startChar: cursorStart.ch,
+            endLine: cursorEnd.line,
+            endChar: cursorEnd.ch,
+        };
+    }
+
+    private async openAddCommentModal(editor: Editor, filePath: string | undefined) {
+        const target = await this.getSelectionTarget(editor, filePath);
+        if (!target) {
             new Notice("Please select some text to add a comment.");
             return;
         }
-        const cursorStart = editor.getCursor("from");
-        const cursorEnd = editor.getCursor("to");
-        const hash = await generateHash(selection);
         await this.activateView();
         this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
             if (leaf.view instanceof SideNoteView) {
-                leaf.view.openInlineNewComment({
-                    filePath: filePath!,
-                    isNoteComment: false,
-                    selectedText: selection,
-                    selectedTextHash: hash,
-                    startLine: cursorStart.line,
-                    startChar: cursorStart.ch,
-                    endLine: cursorEnd.line,
-                    endChar: cursorEnd.ch,
-                });
+                leaf.view.openInlineNewComment(target);
             }
         });
+    }
+
+    // Adds a comment with an empty body so the selection is highlighted without
+    // interrupting reading to type text.
+    private async highlightSelection(editor: Editor, filePath: string | undefined) {
+        const target = await this.getSelectionTarget(editor, filePath);
+        if (!target) {
+            new Notice("Please select some text to highlight.");
+            return;
+        }
+        await this.addComment({
+            ...target,
+            id: generateCommentId(),
+            comment: "",
+            timestamp: Date.now(),
+            isOrphaned: false,
+        }, "Highlight added!");
     }
 
     private async openInlineNoteComment(filePath: string): Promise<void> {
@@ -416,6 +452,7 @@ export default class SideNote extends Plugin {
             highlightOpacity: loadedData.highlightOpacity !== undefined ? loadedData.highlightOpacity : DEFAULT_SETTINGS.highlightOpacity,
             highlightStyle: loadedData.highlightStyle || DEFAULT_SETTINGS.highlightStyle,
             showResolvedComments: loadedData.showResolvedComments !== undefined ? loadedData.showResolvedComments : DEFAULT_SETTINGS.showResolvedComments,
+            allowEmptyComments: loadedData.allowEmptyComments !== undefined ? loadedData.allowEmptyComments : DEFAULT_SETTINGS.allowEmptyComments,
         };
         this.comments = loadedData.comments || [];
         this.applyHighlightColor();

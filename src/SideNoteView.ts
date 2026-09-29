@@ -218,6 +218,7 @@ export class SideNoteView extends ItemView {
             this.renderInlineEditForm(
                 commentEl,
                 comment.filePath,
+                this.canSaveEmpty(comment.isNoteComment),
                 async (text) => {
                     this.editingCommentId = null;
                     this.editingDraft = "";
@@ -288,7 +289,7 @@ export class SideNoteView extends ItemView {
                 menuContainer.classList.toggle("visible");
             };
 
-            if (!collapsed) {
+            if (!collapsed && comment.comment) {
                 // --- Rendered comment content ---
                 // markdown-rendered is required so Obsidian's CSS scopes (blockquote,
                 // callout, etc.) resolve correctly inside a custom ItemView.
@@ -379,9 +380,15 @@ export class SideNoteView extends ItemView {
         textarea.setSelectionRange(caret, caret);
     }
 
+    /** Note comments always need text; selection comments may be empty highlights if enabled. */
+    private canSaveEmpty(isNoteComment: boolean | undefined): boolean {
+        return this.plugin.settings.allowEmptyComments && !isNoteComment;
+    }
+
     private renderInlineEditForm(
         container: HTMLElement,
         filePath: string,
+        allowEmpty: boolean,
         onSave: (text: string) => Promise<void>,
         onCancel: () => void,
     ) {
@@ -399,7 +406,7 @@ export class SideNoteView extends ItemView {
 
         const doSave = async () => {
             const text = this.editingDraft.trim();
-            if (!text) return;
+            if (!text && !allowEmpty) return;
             await onSave(text);
         };
 
@@ -455,7 +462,7 @@ export class SideNoteView extends ItemView {
 
         const saveNew = async () => {
             const text = this.pendingAddDraft.trim();
-            if (!text) return;
+            if (!text && !this.canSaveEmpty(pa.isNoteComment)) return;
             const info = this.pendingAdd!;
             this.pendingAdd = null;
             this.pendingAddDraft = "";

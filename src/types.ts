@@ -16,6 +16,7 @@ export interface SideNoteSettings {
     highlightOpacity: number;
     highlightStyle: HighlightStyle;
     showResolvedComments: boolean;
+    allowEmptyComments: boolean;
 }
 
 export interface PluginData extends SideNoteSettings {
@@ -49,4 +50,5 @@ export const DEFAULT_SETTINGS: SideNoteSettings = {
     highlightOpacity: 0.2,
     highlightStyle: "both",
     showResolvedComments: false,
+    allowEmptyComments: false,
 };
