@@ -2,6 +2,7 @@ import { MarkdownView } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { RangeSetBuilder, StateEffect } from "@codemirror/state";
+import type { ChangeSet, Text } from "@codemirror/state";
 import type { SideNotePlugin } from "./types";
 
 export interface EditorWithCM {
@@ -9,6 +10,27 @@ export interface EditorWithCM {
 }
 
 export const forceUpdateEffect = StateEffect.define<null>();
+
+// Finds `text` inside the inserted text of a change that replaced the whole range
+// [from, to], preferring the occurrence closest to where it sat in the replaced block.
+// Returns null otherwise, so ordinary deletions and in-place edits still orphan.
+function findInReplacement(changes: ChangeSet, doc: Text, from: number, to: number, text: string): number | null {
+    let best: number | null = null;
+    let bestDist = Infinity;
+    changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+        if (fromA > from || toA < to) return;
+        const expected = fromB + (from - fromA);
+        const inserted = doc.sliceString(fromB, toB);
+        for (let i = inserted.indexOf(text); i !== -1; i = inserted.indexOf(text, i + 1)) {
+            const dist = Math.abs(fromB + i - expected);
+            if (dist < bestDist) {
+                best = fromB + i;
+                bestDist = dist;
+            }
+        }
+    });
+    return best;
+}
 
 export function createHighlightPlugin(plugin: SideNotePlugin) {
     return ViewPlugin.fromClass(class {
@@ -35,7 +57,8 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
         }
 
         handleClick(event: MouseEvent) {
-            const highlight = (event.target as HTMLElement).closest('.sidenote-highlight');
+            // Rendered spans inside widgets (e.g. Live Preview tables) have their own handler.
+            const highlight = (event.target as HTMLElement).closest('.sidenote-highlight:not(.sidenote-highlight-preview)');
             if (!highlight) return;
             const commentId = highlight.getAttribute('data-comment-id');
             if (commentId) plugin.activateViewAndHighlightComment(commentId);
@@ -127,8 +150,19 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
                     // keeping the highlight start anchored to the original selected text.
                     // assoc=-1 for to: insertion AT to stays left of inserted text,
                     // keeping the highlight end anchored without absorbing appended text.
-                    const newFrom = update.changes.mapPos(from,  1);
-                    const newTo   = update.changes.mapPos(to,   -1);
+                    let newFrom = update.changes.mapPos(from,  1);
+                    let newTo   = update.changes.mapPos(to,   -1);
+
+                    if (!(newFrom < newTo && doc.sliceString(newFrom, newTo) === selectedText)) {
+                        // A change that replaces a whole block around the text (e.g. Live Preview
+                        // rewriting a table when a row is added) collapses the mapped range even
+                        // though the text survives. Look for it inside the replacement only.
+                        const relocated = findInReplacement(update.changes, doc, from, to, selectedText);
+                        if (relocated !== null) {
+                            newFrom = relocated;
+                            newTo   = relocated + selectedText.length;
+                        }
+                    }
 
                     if (newFrom < newTo && doc.sliceString(newFrom, newTo) === selectedText) {
                         newPositions.set(id, { from: newFrom, to: newTo, selectedText });
