@@ -31,6 +31,7 @@ export class CommentManager {
 
     private generateHash(text: string): string {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
             const nodeCrypto = require('crypto');
             return nodeCrypto.createHash('sha256').update(text).digest('hex');
         } catch {
