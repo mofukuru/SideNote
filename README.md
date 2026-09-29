@@ -96,7 +96,7 @@ Access settings via Settings → Side Note:
 - **Comment Sort Order**: Choose between position in file or timestamp
 - **Reverse Sort Order**: Show comments in descending order (newest first / bottom of file first)
 - **Show Highlights in Editor**: Toggle visual highlights on/off
-- **Show Resolved Comments**: Show or hide resolved comments in the sidebar
+- **Show Resolved Comments**: Show or hide resolved comments in the sidebar (also toggleable via the "Resolved" checkbox in the sidebar header)
 - **Highlight color**: Choose the color used to highlight commented text
 - **Highlight opacity**: Control how transparent the highlight is (0 = invisible, 1 = fully opaque)
 - **Highlight style**: Choose how commented text is marked in the editor:

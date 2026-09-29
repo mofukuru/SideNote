@@ -634,6 +634,22 @@
     color: var(--text-normal);
 }
 
+.sidenote-resolved-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.sidenote-resolved-toggle input {
+    margin: 0;
+    cursor: pointer;
+}
+
 /* All notes view file section */
 .sidenote-file-section {
     margin-bottom: 8px;
