@@ -9,6 +9,7 @@ export async function generateHash(text: string): Promise<string> {
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     } catch {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
             const nodeCrypto = require('crypto');
             return nodeCrypto.createHash('sha256').update(text).digest('hex');
         } catch {
@@ -29,6 +30,7 @@ export function generateCommentId(): string {
         return crypto.randomUUID();
     }
     try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const nodeCrypto = require('crypto');
         if (typeof nodeCrypto.randomUUID === "function") {
             return nodeCrypto.randomUUID();

@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Obsidian の規約に合わせ、"v" を付けないバージョンタグのみを対象にする
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches manifest.json / versions.json
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          manifest_version="$(node -p "require('./manifest.json').version")"
+          if [ "$tag" != "$manifest_version" ]; then
+            echo "::error::tag ($tag) と manifest.json の version ($manifest_version) が一致しません"
+            exit 1
+          fi
+          if [ "$(node -p "require('./versions.json')['$tag'] ?? ''")" = "" ]; then
+            echo "::error::versions.json に $tag のエントリがありません"
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Create draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            main.js manifest.json styles.css
