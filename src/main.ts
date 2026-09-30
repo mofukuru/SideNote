@@ -138,7 +138,7 @@ export default class SideNote extends Plugin {
             name: "Add comment to selection",
             icon: "message-square",
             editorCallback: (editor, view) => {
-                void this.openAddCommentModal(editor, view.file?.path);
+                void this.openAddCommentModal(editor, view.file?.path, view);
             },
         });
 
@@ -147,7 +147,7 @@ export default class SideNote extends Plugin {
             name: "Highlight selection (without comment)",
             icon: "highlighter",
             editorCallback: (editor, view) => {
-                void this.highlightSelection(editor, view.file?.path);
+                void this.highlightSelection(editor, view.file?.path, view);
             },
         });
 
@@ -157,12 +157,12 @@ export default class SideNote extends Plugin {
                     menu.addItem((item) => {
                         item.setTitle("Add comment to selection")
                             .setIcon("message-square")
-                            .onClick(() => this.openAddCommentModal(editor, view.file?.path));
+                            .onClick(() => this.openAddCommentModal(editor, view.file?.path, view));
                     });
                     menu.addItem((item) => {
                         item.setTitle("Highlight selection")
                             .setIcon("highlighter")
-                            .onClick(() => this.highlightSelection(editor, view.file?.path));
+                            .onClick(() => this.highlightSelection(editor, view.file?.path, view));
                     });
                 } else {
                     menu.addItem((item) => {
@@ -344,7 +344,13 @@ export default class SideNote extends Plugin {
         await this.onCommentsChanged("Comment reopened!");
     }
 
-    private async getSelectionTarget(editor: Editor, filePath: string | undefined) {
+    private async getSelectionTarget(editor: Editor, filePath: string | undefined, view?: unknown) {
+        // In Live Preview, a selection inside a table cell comes from the cell's nested
+        // editor, whose coordinates are relative to the cell. Obsidian mirrors that
+        // selection onto the note's main editor, so read it from there instead.
+        if (view instanceof MarkdownView && view.editor !== editor && view.editor.somethingSelected()) {
+            editor = view.editor;
+        }
         const selection = editor.getSelection();
         if (!selection?.trim() || !filePath) return null;
         const cursorStart = editor.getCursor("from");
@@ -361,8 +367,8 @@ export default class SideNote extends Plugin {
         };
     }
 
-    private async openAddCommentModal(editor: Editor, filePath: string | undefined) {
-        const target = await this.getSelectionTarget(editor, filePath);
+    private async openAddCommentModal(editor: Editor, filePath: string | undefined, view?: unknown) {
+        const target = await this.getSelectionTarget(editor, filePath, view);
         if (!target) {
             new Notice("Please select some text to add a comment.");
             return;
@@ -377,8 +383,8 @@ export default class SideNote extends Plugin {
 
     // Adds a comment with an empty body so the selection is highlighted without
     // interrupting reading to type text.
-    private async highlightSelection(editor: Editor, filePath: string | undefined) {
-        const target = await this.getSelectionTarget(editor, filePath);
+    private async highlightSelection(editor: Editor, filePath: string | undefined, view?: unknown) {
+        const target = await this.getSelectionTarget(editor, filePath, view);
         if (!target) {
             new Notice("Please select some text to highlight.");
             return;
@@ -499,76 +505,85 @@ export default class SideNote extends Plugin {
     }
 
     private registerMarkdownPreviewHighlights() {
+        // Runs in Reading view and also on blocks Live Preview renders as widgets
+        // (e.g. table cells), where the CM6 decorations cannot reach the text.
         this.registerMarkdownPostProcessor((element, context) => {
-            if (!element.closest('.markdown-preview-view')) return;
-            if (!this.settings.showHighlights) return;
-
-            const comments = this.commentManager
-                .getCommentsForFile(context.sourcePath)
-                .filter(c => !c.isOrphaned && !!c.selectedText);
-
-            if (!comments.length) return;
-
-            const textNodes: Array<{ node: Text; start: number; end: number }> = [];
-            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-            let offset = 0;
-
-            while (walker.nextNode()) {
-                const node = walker.currentNode as Text;
-                const value = node.nodeValue || "";
-                if (!value.length) continue;
-                textNodes.push({ node, start: offset, end: offset + value.length });
-                offset += value.length;
-            }
-
-            const fullText = textNodes.map(t => t.node.nodeValue || "").join("");
-            if (!fullText.length) return;
-
-            const wraps: Array<{ start: number; end: number; comment: Comment }> = [];
-            for (const comment of comments) {
-                if (!comment.selectedText) continue;
-                const idx = fullText.indexOf(comment.selectedText);
-                if (idx !== -1) wraps.push({ start: idx, end: idx + comment.selectedText.length, comment });
-            }
-
-            if (!wraps.length) return;
-
-            const findPos = (absolute: number): { node: Text; offsetInNode: number } | null => {
-                for (const entry of textNodes) {
-                    if (absolute >= entry.start && absolute <= entry.end) {
-                        return { node: entry.node, offsetInNode: absolute - entry.start };
-                    }
-                }
-                return null;
-            };
-
-            wraps.sort((a, b) => b.start - a.start);
-
-            for (const wrap of wraps) {
-                const startPos = findPos(wrap.start);
-                const endPos = findPos(wrap.end);
-                if (!startPos || !endPos) continue;
-
-                try {
-                    const range = document.createRange();
-                    range.setStart(startPos.node, startPos.offsetInNode);
-                    range.setEnd(endPos.node, endPos.offsetInNode);
-
-                    const span = document.createElement('span');
-                    span.classList.add('sidenote-highlight', 'sidenote-highlight-preview');
-                    span.dataset.commentId = wrap.comment.id;
-                    span.addEventListener('click', (event: MouseEvent) => {
-                        if (event.button !== 0) return;
-                        void this.activateViewAndHighlightComment(wrap.comment.id);
-                    });
-                    span.addEventListener('contextmenu', () => { /* keep default */ });
-
-                    range.surroundContents(span);
-                } catch (e) {
-                    console.warn('Failed to wrap preview highlight', e);
-                }
-            }
+            this.applyRenderedHighlights(element, context.sourcePath);
         });
+    }
+
+    private applyRenderedHighlights(element: HTMLElement, sourcePath: string) {
+        // Unwrap highlights from a previous pass so this can be re-run on live DOM.
+        const existing = element.querySelectorAll('.sidenote-highlight-preview');
+        existing.forEach(span => span.replaceWith(...Array.from(span.childNodes)));
+        if (existing.length) element.normalize();
+        if (!this.settings.showHighlights) return;
+
+        const comments = this.commentManager
+            .getCommentsForFile(sourcePath)
+            .filter(c => !c.isOrphaned && !!c.selectedText);
+
+        if (!comments.length) return;
+
+        const textNodes: Array<{ node: Text; start: number; end: number }> = [];
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let offset = 0;
+
+        while (walker.nextNode()) {
+            const node = walker.currentNode as Text;
+            const value = node.nodeValue || "";
+            if (!value.length) continue;
+            textNodes.push({ node, start: offset, end: offset + value.length });
+            offset += value.length;
+        }
+
+        const fullText = textNodes.map(t => t.node.nodeValue || "").join("");
+        if (!fullText.length) return;
+
+        const wraps: Array<{ start: number; end: number; comment: Comment }> = [];
+        for (const comment of comments) {
+            if (!comment.selectedText) continue;
+            const idx = fullText.indexOf(comment.selectedText);
+            if (idx !== -1) wraps.push({ start: idx, end: idx + comment.selectedText.length, comment });
+        }
+
+        if (!wraps.length) return;
+
+        const findPos = (absolute: number): { node: Text; offsetInNode: number } | null => {
+            for (const entry of textNodes) {
+                if (absolute >= entry.start && absolute <= entry.end) {
+                    return { node: entry.node, offsetInNode: absolute - entry.start };
+                }
+            }
+            return null;
+        };
+
+        wraps.sort((a, b) => b.start - a.start);
+
+        for (const wrap of wraps) {
+            const startPos = findPos(wrap.start);
+            const endPos = findPos(wrap.end);
+            if (!startPos || !endPos) continue;
+
+            try {
+                const range = document.createRange();
+                range.setStart(startPos.node, startPos.offsetInNode);
+                range.setEnd(endPos.node, endPos.offsetInNode);
+
+                const span = document.createElement('span');
+                span.classList.add('sidenote-highlight', 'sidenote-highlight-preview');
+                span.dataset.commentId = wrap.comment.id;
+                span.addEventListener('click', (event: MouseEvent) => {
+                    if (event.button !== 0) return;
+                    void this.activateViewAndHighlightComment(wrap.comment.id);
+                });
+                span.addEventListener('contextmenu', () => { /* keep default */ });
+
+                range.surroundContents(span);
+            } catch (e) {
+                console.warn('Failed to wrap preview highlight', e);
+            }
+        }
     }
 
     applyHighlightColor() {
@@ -612,6 +627,17 @@ export default class SideNote extends Plugin {
                 const cm = (leaf.view.editor as unknown as EditorWithCM).cm;
                 if (cm?.dispatch) {
                     cm.dispatch({ effects: [forceUpdateEffect.of(null)] });
+                }
+                // Live Preview renders tables as widgets whose cells are only post-processed
+                // when the table re-renders, so refresh their highlights directly. Skip the
+                // wrapper of a cell currently being edited (it hosts a nested editor).
+                const file = leaf.view.file;
+                if (file) {
+                    leaf.view.contentEl
+                        .querySelectorAll<HTMLElement>('.cm-table-widget .table-cell-wrapper')
+                        .forEach(cellEl => {
+                            if (!cellEl.querySelector('.cm-editor')) this.applyRenderedHighlights(cellEl, file.path);
+                        });
                 }
             }
         });
