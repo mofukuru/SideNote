@@ -105,7 +105,7 @@ Side Note パネル上部の検索欄にキーワードを入力すると、コ�
 - **Comment Sort Order**: ファイル内の位置順またはタイムスタンプ順を選択
 - **Reverse Sort Order**: コメントを降順（新しい順 / ファイル末尾側から）で表示
 - **Show Highlights in Editor**: エディタ内の視覚的なハイライトのオン/オフ切り替え
-- **Show Resolved Comments**: 解決済みコメントをサイドバーに表示するかどうか
+- **Show Resolved Comments**: 解決済みコメントをサイドバーに表示するかどうか(サイドバー上部の「Resolved」チェックボックスからも切り替え可能)
 - **Allow empty comments**: 選択テキストへのコメントを本文なしで保存できるようにし、単なるハイライトとして使えるようにする（デフォルトはオフ。ノートコメントは引き続き本文が必要）
 - **Highlight color**: コメントのハイライト色を選択
 - **Highlight opacity**: ハイライトの透明度を調整（0 = 透明、1 = 不透明）
