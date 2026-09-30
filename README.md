@@ -205,6 +205,19 @@ Access settings via Settings → Side Note:
 
 ## Version History
 
+### 1.2.0
+- **Added "Highlight selection (without comment)" command** (#33)
+  - Instantly highlights the selected text as a comment with no body, without opening the sidebar form. Assign a hotkey to highlight without interrupting your reading flow. "Highlight selection" is also added to the right-click menu when text is selected
+- **Added "Allow empty comments" setting** (off by default)
+  - When enabled, the sidebar's inline add/edit forms can be saved with an empty body. This applies only to comments on selected text; note comments still require a body. Comments with an empty body show only their header in the sidebar
+- **Added a "Resolved" checkbox to the sidebar header** (#34)
+  - Mirrors the "Show resolved comments" setting, so resolved comments can be shown or hidden without opening settings. When every comment in the current file is resolved and hidden, the sidebar now says "All comments in this file are resolved."
+- **Fixed comment highlights and positions in Live Preview tables** (#35)
+  - Highlights on commented text inside tables were not shown in Live Preview (only in Source mode). Highlights are now applied to rendered table cells, and also appear in other rendered blocks such as callouts and embeds
+  - Adding a comment from a table cell saved cell-relative coordinates, which could make jumping to the comment fail. The selection is now read from the note's main editor, so positions are note-relative
+  - Table operations that rewrite the whole table (e.g. adding a row) no longer orphan comments inside it
+  - Clicking a rendered highlight no longer triggers the sidebar twice
+
 ### 1.1.1
 - **Fixed orphaned comments never re-highlighting even when their text still exists**
   - When a comment was orphaned, its stored offsets and line/character coordinates are collapsed to a single point. Coordinate recovery for orphaned comments only tried an exact offset match and an exact line/char match — both of which always fail after the collapse — and never fell back to a text search. As a result, comments stayed orphaned (no highlight) forever, even when the selected text was still present in the note. Newly added comments highlighted correctly, so the problem only affected pre-existing comments
