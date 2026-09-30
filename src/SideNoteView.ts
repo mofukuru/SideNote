@@ -218,6 +218,7 @@ export class SideNoteView extends ItemView {
             this.renderInlineEditForm(
                 commentEl,
                 comment.filePath,
+                this.canSaveEmpty(comment.isNoteComment),
                 async (text) => {
                     this.editingCommentId = null;
                     this.editingDraft = "";
@@ -288,7 +289,7 @@ export class SideNoteView extends ItemView {
                 menuContainer.classList.toggle("visible");
             };
 
-            if (!collapsed) {
+            if (!collapsed && comment.comment) {
                 // --- Rendered comment content ---
                 // markdown-rendered is required so Obsidian's CSS scopes (blockquote,
                 // callout, etc.) resolve correctly inside a custom ItemView.
@@ -379,9 +380,15 @@ export class SideNoteView extends ItemView {
         textarea.setSelectionRange(caret, caret);
     }
 
+    /** Note comments always need text; selection comments may be empty highlights if enabled. */
+    private canSaveEmpty(isNoteComment: boolean | undefined): boolean {
+        return this.plugin.settings.allowEmptyComments && !isNoteComment;
+    }
+
     private renderInlineEditForm(
         container: HTMLElement,
         filePath: string,
+        allowEmpty: boolean,
         onSave: (text: string) => Promise<void>,
         onCancel: () => void,
     ) {
@@ -399,7 +406,7 @@ export class SideNoteView extends ItemView {
 
         const doSave = async () => {
             const text = this.editingDraft.trim();
-            if (!text) return;
+            if (!text && !allowEmpty) return;
             await onSave(text);
         };
 
@@ -455,7 +462,7 @@ export class SideNoteView extends ItemView {
 
         const saveNew = async () => {
             const text = this.pendingAddDraft.trim();
-            if (!text) return;
+            if (!text && !this.canSaveEmpty(pa.isNoteComment)) return;
             const info = this.pendingAdd!;
             this.pendingAdd = null;
             this.pendingAddDraft = "";
@@ -545,6 +552,22 @@ export class SideNoteView extends ItemView {
             this.renderComments();
         };
 
+        // Quick-access mirror of the global "Show resolved comments" setting.
+        const resolvedToggle = viewHeader.createEl("label", {
+            cls: "sidenote-resolved-toggle",
+            attr: { "aria-label": "Show resolved comments" },
+        });
+        const resolvedCheckbox = resolvedToggle.createEl("input", { attr: { type: "checkbox" } });
+        resolvedCheckbox.checked = this.plugin.settings.showResolvedComments;
+        resolvedToggle.createSpan({ text: "Resolved" });
+        resolvedCheckbox.addEventListener("change", async () => {
+            this.plugin.settings.showResolvedComments = resolvedCheckbox.checked;
+            await this.plugin.saveData();
+            this.app.workspace.getLeavesOfType("sidenote-view").forEach(leaf => {
+                if (leaf.view instanceof SideNoteView) leaf.view.renderComments();
+            });
+        });
+
         const searchInput = viewHeader.createEl("input", {
             cls: "sidenote-search-input",
             attr: { type: "text", placeholder: "Search comments..." },
@@ -573,6 +596,7 @@ export class SideNoteView extends ItemView {
 
         if (this.file) {
             let commentsForFile = this.plugin.commentManager.getCommentsForFile(this.file.path);
+            const hasHiddenResolved = !this.plugin.settings.showResolvedComments && commentsForFile.some(c => c.resolved);
 
             if (!this.plugin.settings.showResolvedComments) {
                 commentsForFile = commentsForFile.filter(c => !c.resolved);
@@ -601,6 +625,9 @@ export class SideNoteView extends ItemView {
                 const emptyStateEl = commentsContainer.createDiv("sidenote-empty-state");
                 if (this.searchQuery.trim()) {
                     emptyStateEl.createEl("p", { text: "No comments match your search." });
+                } else if (hasHiddenResolved) {
+                    emptyStateEl.createEl("p", { text: "All comments in this file are resolved." });
+                    emptyStateEl.createEl("p", { text: "Check 'Resolved' above to show them." });
                 } else {
                     emptyStateEl.createEl("p", { text: "No comments for this file yet." });
                     emptyStateEl.createEl("p", { text: "Select text in your note and use the 'add comment to selection' command to get started." });
