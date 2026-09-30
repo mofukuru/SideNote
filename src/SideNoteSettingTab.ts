@@ -69,6 +69,18 @@ export class SideNoteSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
+            .setName("Allow empty comments")
+            .setDesc("Allow saving a comment on selected text without any comment text, so it acts as a plain highlight. The \"Highlight selection\" command always creates one instantly.")
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.allowEmptyComments)
+                    .onChange(async (value: boolean) => {
+                        this.plugin.settings.allowEmptyComments = value;
+                        await this.plugin.saveData();
+                    })
+            );
+
+        new Setting(containerEl)
             .setName("Highlight color")
             .setDesc("Choose the color for highlighted comments in the editor")
             .addColorPicker((colorPicker) =>
