@@ -6,7 +6,7 @@ import { SideNoteSettingTab } from "./SideNoteSettingTab";
 import { createHighlightPlugin, forceUpdateEffect, EditorWithCM } from "./highlightPlugin";
 import { switchToSideNoteView, generateHash, generateCommentId } from "./utils";
 import { DEFAULT_SETTINGS } from "./types";
-import type { PluginData, SideNoteSettings } from "./types";
+import type { CommentColor, PluginData, SideNoteSettings } from "./types";
 
 export default class SideNote extends Plugin {
     commentManager: CommentManager;
@@ -294,7 +294,19 @@ export default class SideNote extends Plugin {
             if (leaf.view instanceof SideNoteView) leaf.view.renderComments();
         });
         this.refreshEditorDecorations();
+        this.rerenderReadingViews();
         new Notice(message);
+    }
+
+    // Reading view highlights are added only when the page is rendered (by the
+    // markdown post processor), so re-render open Reading views after a comment
+    // changes; otherwise e.g. a new color shows up only after reopening the note.
+    private rerenderReadingViews() {
+        this.app.workspace.iterateAllLeaves((leaf) => {
+            if (leaf.view instanceof MarkdownView && leaf.view.getMode() === "preview") {
+                leaf.view.previewMode.rerender(true);
+            }
+        });
     }
 
     private createAddFingerprint(comment: Comment): string {
@@ -342,6 +354,11 @@ export default class SideNote extends Plugin {
     async unresolveComment(commentId: string) {
         this.commentManager.unresolveComment(commentId);
         await this.onCommentsChanged("Comment reopened!");
+    }
+
+    async setCommentColor(commentId: string, color: CommentColor | null) {
+        this.commentManager.setCommentColor(commentId, color);
+        await this.onCommentsChanged("Comment color changed!");
     }
 
     private async getSelectionTarget(editor: Editor, filePath: string | undefined, view?: unknown) {
@@ -573,6 +590,7 @@ export default class SideNote extends Plugin {
                 const span = document.createElement('span');
                 span.classList.add('sidenote-highlight', 'sidenote-highlight-preview');
                 span.dataset.commentId = wrap.comment.id;
+                if (wrap.comment.color) span.dataset.sidenoteColor = wrap.comment.color;
                 span.addEventListener('click', (event: MouseEvent) => {
                     if (event.button !== 0) return;
                     void this.activateViewAndHighlightComment(wrap.comment.id);
@@ -591,6 +609,8 @@ export default class SideNote extends Plugin {
         const { highlightColor: color, highlightOpacity: opacity, highlightStyle } = this.settings;
         const rgb = this.hexToRgb(color);
 
+        // Per-comment colors in styles.css reuse this opacity with their own RGB.
+        root.style.setProperty('--sidenote-highlight-opacity', String(opacity));
         root.style.setProperty('--sidenote-highlight-color', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`);
         root.style.setProperty('--sidenote-highlight-hover', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.min(opacity + 0.15, 1)})`);
         root.style.setProperty('--sidenote-highlight-border', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.min(opacity + 0.4, 1)})`);

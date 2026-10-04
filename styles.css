@@ -439,6 +439,53 @@
     background-color: var(--sidenote-orphaned-hover, rgba(255, 100, 100, 0.25));
 }
 
+/* Per-comment colors. Each sets --sidenote-rgb; the rules below turn it into the
+   same three variables the default color uses, at the opacity chosen in settings. */
+[data-sidenote-color="red"]    { --sidenote-rgb: 235, 87, 87; }
+[data-sidenote-color="orange"] { --sidenote-rgb: 242, 153, 74; }
+[data-sidenote-color="green"]  { --sidenote-rgb: 76, 175, 80; }
+[data-sidenote-color="blue"]   { --sidenote-rgb: 66, 133, 244; }
+[data-sidenote-color="purple"] { --sidenote-rgb: 155, 89, 182; }
+
+.sidenote-highlight[data-sidenote-color] {
+    --sidenote-highlight-color: rgba(var(--sidenote-rgb), var(--sidenote-highlight-opacity, 0.2));
+    --sidenote-highlight-hover: rgba(var(--sidenote-rgb), min(calc(var(--sidenote-highlight-opacity, 0.2) + 0.15), 1));
+    --sidenote-highlight-border: rgba(var(--sidenote-rgb), min(calc(var(--sidenote-highlight-opacity, 0.2) + 0.4), 1));
+}
+
+/* Colored stripe on sidebar cards so the color is visible there too */
+.sidenote-comment-item[data-sidenote-color] {
+    border-left: 4px solid rgb(var(--sidenote-rgb));
+}
+
+/* Swatch row inside the "..." menu */
+.sidenote-color-row {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.sidenote-color-swatch {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 0;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    border: 2px solid transparent !important;
+    background-color: rgb(var(--sidenote-rgb)) !important;
+    cursor: pointer;
+    box-shadow: none !important;
+}
+
+.sidenote-color-swatch[data-sidenote-color="default"] {
+    background-color: var(--sidenote-highlight-border, rgba(255, 200, 0, 0.6)) !important;
+}
+
+.sidenote-color-swatch.is-selected {
+    border-color: var(--text-normal) !important;
+}
+
 /* Highlights inside rendered markdown (Reading view / Live Preview callouts) */
 .markdown-preview-view .sidenote-highlight,
 .markdown-source-view.mod-cm6 .markdown-rendered .sidenote-highlight {

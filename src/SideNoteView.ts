@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, TFile, MarkdownView, Notice, ViewStateResult, MarkdownRenderer, Scope, Platform, setIcon } from "obsidian";
 import type { SideNotePlugin } from "./types";
+import { COMMENT_COLORS } from "./types";
 import type { Comment } from "./commentManager";
 import type { CustomViewState } from "./types";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -124,6 +125,7 @@ export class SideNoteView extends ItemView {
         if (comment.resolved) commentEl.addClass("resolved");
         if (comment.isNoteComment) commentEl.addClass("sidenote-note-comment");
         if (this.activeCommentId === comment.id) commentEl.addClass("active");
+        if (comment.color) commentEl.setAttribute("data-sidenote-color", comment.color);
 
         const isEditing = this.editingCommentId === comment.id;
         if (isEditing) commentEl.addClass("sidenote-editing");
@@ -283,6 +285,22 @@ export class SideNoteView extends ItemView {
                     this.plugin.resolveComment(comment.id);
                 }
             };
+
+            // Color swatches: "default" (settings color) followed by the extra palette.
+            if (!comment.isNoteComment) {
+                const colorRow = menuContainer.createDiv("sidenote-color-row");
+                for (const color of [null, ...COMMENT_COLORS]) {
+                    const swatch = colorRow.createEl("button", { cls: "sidenote-color-swatch" });
+                    swatch.setAttribute("data-sidenote-color", color ?? "default");
+                    swatch.setAttribute("aria-label", color ?? "default");
+                    if ((comment.color ?? null) === color) swatch.addClass("is-selected");
+                    swatch.onclick = (e) => {
+                        e.stopPropagation();
+                        menuContainer.classList.remove("visible");
+                        void this.plugin.setCommentColor(comment.id, color);
+                    };
+                }
+            }
 
             menuButton.onclick = (e) => {
                 e.stopPropagation();

@@ -248,12 +248,12 @@ export function createHighlightPlugin(plugin: SideNotePlugin) {
 
             for (const [id, { from, to }] of this.positions) {
                 if (from >= 0 && to <= doc.length && from < to) {
+                    const color = plugin.commentManager.getComments().find(c => c.id === id)?.color;
+                    const attributes: Record<string, string> = { 'data-comment-id': id };
+                    if (color) attributes['data-sidenote-color'] = color;
                     decorationsArray.push({
                         from, to,
-                        decoration: Decoration.mark({
-                            class: 'sidenote-highlight',
-                            attributes: { 'data-comment-id': id },
-                        }),
+                        decoration: Decoration.mark({ class: 'sidenote-highlight', attributes }),
                     });
                 }
             }

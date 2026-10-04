@@ -95,6 +95,7 @@ Type in the search bar at the top of the Side Note panel to filter comments in r
 
 - **Edit**: Click the `...` menu → Edit, or **double-click** the comment — an inline textarea opens in the sidebar. `Cmd/Ctrl + Enter` saves, `Esc` cancels. While editing, the note body remains freely selectable — select text and use "Quote selection" to insert it as a blockquote, or copy/paste it directly.
 - **Delete**: Click the `...` menu → Delete
+- **Color**: Click the `...` menu and pick a color swatch (default, red, orange, green, blue, purple) to color that comment's highlight — handy for marking importance. The first swatch returns to the default color from settings.
 - **Collapse / Expand**: Click the chevron next to a comment's title to hide or show its body
 - **Sort**: Change sort order in Settings → Comment sort order (by position or timestamp, ascending or descending)
 

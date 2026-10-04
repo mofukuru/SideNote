@@ -1,3 +1,5 @@
+import type { CommentColor } from "./types";
+
 export interface Comment {
     id: string;
     filePath: string;
@@ -19,6 +21,8 @@ export interface Comment {
     commentPath?: string;
     resolved?: boolean;
     resolvedAt?: number | null;
+    // Undefined means "use the default highlight color from settings".
+    color?: CommentColor;
 }
 
 export class CommentManager {
@@ -83,6 +87,16 @@ export class CommentManager {
         if (comment) {
             comment.resolved = false;
             comment.resolvedAt = null;
+        }
+    }
+
+    setCommentColor(id: string, color: CommentColor | null) {
+        const comment = this.comments.find(c => c.id === id);
+        if (!comment) return;
+        if (color) {
+            comment.color = color;
+        } else {
+            delete comment.color;
         }
     }
 
