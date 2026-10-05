@@ -242,10 +242,10 @@ Access settings via Settings → Side Note:
 - **Added a keyboard shortcut hint** (`Ctrl+Enter` / `⌘+Enter` to save, `Esc` to cancel) shown in the edit and add-comment forms
 
 ### 1.0.9
-- **Fixed "Current File" / "All Notes" toggle showing the wrong mode label** (issue [#27](https://github.com/mofukuru/SideNote/issues))
+- **Fixed "Current File" / "All Notes" toggle showing the wrong mode label** (issue [#27](https://github.com/mofukuru/side-note/issues))
   - The button was displaying the *next* mode (where clicking would take you) instead of the *current* mode being shown — the opposite of what users expect
   - Fixed: the button now always reflects the currently active view mode
-- **Added highlight style setting** (issue [#28](https://github.com/mofukuru/SideNote/issues))
+- **Added highlight style setting** (issue [#28](https://github.com/mofukuru/side-note/issues))
   - New **Highlight style** dropdown in Settings → Side Note with five options:
     - *Underline + Background* (default — same as before)
     - *Background only*
@@ -283,55 +283,55 @@ Access settings via Settings → Side Note:
   - Works for both note comments and text-selection comments
   - `Ctrl/Cmd+Enter` saves (routed through Obsidian's `Scope` system to avoid conflicts with global hotkeys), `Esc` cancels
   - In-progress drafts are preserved if a background event (e.g. file save) refreshes the sidebar during editing
-- **Fixed external URLs and Obsidian protocol links in comment text** (issue [#25](https://github.com/mofukuru/SideNote/issues))
+- **Fixed external URLs and Obsidian protocol links in comment text** (issue [#25](https://github.com/mofukuru/side-note/issues))
   - Links starting with `https://`, `http://`, `obsidian://`, etc. now open correctly in the system browser/app instead of throwing an error
   - Previously, all hrefs were passed to `openLinkText`, which only handles internal Obsidian links
-- **Added Ctrl/Cmd+Click to open wiki links in a new tab** (issue [#24](https://github.com/mofukuru/SideNote/issues))
+- **Added Ctrl/Cmd+Click to open wiki links in a new tab** (issue [#24](https://github.com/mofukuru/side-note/issues))
   - Hold Ctrl (Windows/Linux) or Cmd (Mac) while clicking a `[[WikiLink]]` in a comment to open the linked note in a new tab instead of replacing the current one
-- **Fixed OT mapPos bias bug — highlights no longer orphan when editing at their boundary** (issue [#26](https://github.com/mofukuru/SideNote/issues))
+- **Fixed OT mapPos bias bug — highlights no longer orphan when editing at their boundary** (issue [#26](https://github.com/mofukuru/side-note/issues))
   - The `assoc` arguments to `ChangeSet.mapPos()` were reversed: `from` used `-1` (left bias) and `to` used `+1` (right bias)
   - This caused any insertion at the exact start or end of a highlight to expand the tracked range, making the text check fail and immediately orphaning the comment
   - Fixed to `assoc=+1` for `from` and `assoc=-1` for `to`, so boundary insertions stay outside the range
-- **Orphaned (red) highlights now follow edits via OT** (issue [#26](https://github.com/mofukuru/SideNote/issues))
+- **Orphaned (red) highlights now follow edits via OT** (issue [#26](https://github.com/mofukuru/side-note/issues))
   - Previously the red dot froze at the position where the comment became orphaned; any edits before it left the dot pointing at the wrong location
   - A new `orphanedAt` tracker keeps applying `ChangeSet.mapPos()` to the orphan position through every subsequent edit
   - Undo recovery is now instant: when the original text reappears at the tracked position the comment turns yellow again without waiting for a file save
-- **Added absolute offset persistence for cross-session accuracy** (issue [#26](https://github.com/mofukuru/SideNote/issues))
+- **Added absolute offset persistence for cross-session accuracy** (issue [#26](https://github.com/mofukuru/side-note/issues))
   - New `startOffset`/`endOffset` fields are stored in `data.json` and updated by the OT tracker on every change
   - On Obsidian restart the stored offsets are verified first; a re-search runs only if they are stale (e.g. after external sync)
 - **Expanded external-sync re-search window from ±10 to ±50 lines**
   - Improves recovery when a note is edited on another device and the commented text has moved many lines
 
 ### 1.0.6
-- **Fixed `[[WikiLink]]` internal links in comments** (issue [#11](https://github.com/mofukuru/SideNote/issues))
+- **Fixed `[[WikiLink]]` internal links in comments** (issue [#11](https://github.com/mofukuru/side-note/issues))
   - Links inside comment text now correctly open the linked note
   - Added an explicit `openLinkText` handler since Obsidian's workspace-level link handler does not activate in custom sidebar views
   - Clicking a link no longer also triggers the "jump to editor position" behaviour
-- **Added search filter to sidebar** (issue [#20](https://github.com/mofukuru/SideNote/issues))
+- **Added search filter to sidebar** (issue [#20](https://github.com/mofukuru/side-note/issues))
   - A search input now appears at the top of the Side Note panel
   - Filters comments in real time by highlighted text and comment body
   - Works in both Current File and All Notes views
   - Japanese, Chinese, Korean, and other IME-based input methods are supported without interrupting the conversion process
-- **Double-click to edit** (issue [#19](https://github.com/mofukuru/SideNote/issues))
+- **Double-click to edit** (issue [#19](https://github.com/mofukuru/side-note/issues))
   - Double-clicking a comment in the sidebar opens the edit modal directly; single-click still jumps to the editor position
-- **Redesigned highlight tracking** (issue [#23](https://github.com/mofukuru/SideNote/issues))
+- **Redesigned highlight tracking** (issue [#23](https://github.com/mofukuru/side-note/issues))
   - Replaced text-search-based positioning with Operational Transformation (OT) using CodeMirror 6's `ChangeSet.mapPos()`
   - Highlights follow their exact text through edits without drifting to other occurrences of the same string
   - Deleting commented text immediately marks the comment as orphaned (red marker) instead of moving the highlight elsewhere
   - Removed the full-document hash search (`findTextByHashOptimized`) that was the root cause of highlight drift; a ±10-line proximity search is retained for files edited outside Obsidian
   - Undo (Ctrl+Z) automatically recovers the comment when the file is saved
-- **Security hardening** (issue [#21](https://github.com/mofukuru/SideNote/issues))
+- **Security hardening** (issue [#21](https://github.com/mofukuru/side-note/issues))
   - Added `normalizeCommentsFolderPath()`: rejects absolute paths and `..` segments, falls back to default with a Notice
   - Replaced multi-line `[^]*?` regex in markdown block parsing with deterministic `indexOf`-based parsing
   - Fixed event listener leak: bound click handler now stored as a class property and correctly removed on destroy
 
 ### 1.0.5
-- **Fixed duplicate comment creation** (issue [#16](https://github.com/mofukuru/SideNote/issues/16), [#18](https://github.com/mofukuru/SideNote/issues/18), [#10](https://github.com/mofukuru/SideNote/issues/10))
+- **Fixed duplicate comment creation** (issue [#16](https://github.com/mofukuru/side-note/issues/16), [#18](https://github.com/mofukuru/side-note/issues/18), [#10](https://github.com/mofukuru/side-note/issues/10))
   - Hardened modal submit handling to prevent double execution from click/touch events
   - Added submit re-entrancy guard and debounce to block rapid repeat submissions
   - Migrated comment identity from timestamp to stable UUID (`id`) for reliable targeting
   - Switched markdown markers to id-based format with legacy timestamp fallback
-- **Fixed orphaned comments not recovering** (issue [#15](https://github.com/mofukuru/SideNote/issues/15))
+- **Fixed orphaned comments not recovering** (issue [#15](https://github.com/mofukuru/side-note/issues/15))
   - Orphaned comments are now re-checked on every file update and automatically recover if the text is found again
 - **Added "View all comments" command**
   - New command in the command palette to open a cross-file view showing all comments grouped by note

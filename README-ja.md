@@ -243,10 +243,10 @@ Side Note パネル上部の検索欄にキーワードを入力すると、コ�
 - **キーボードショートカットのヒント表示を追加** — 編集・新規追加フォームに `Ctrl+Enter` / `⌘+Enter` で保存、`Esc` でキャンセルというヒントを表示
 
 ### 1.0.9
-- **「Current File」/「All Notes」トグルボタンのラベルが逆になっていた問題を修正**（issue [#27](https://github.com/mofukuru/SideNote/issues)）
+- **「Current File」/「All Notes」トグルボタンのラベルが逆になっていた問題を修正**（issue [#27](https://github.com/mofukuru/side-note/issues)）
   - ボタンが「現在表示中のモード」ではなく「クリック後に切り替わるモード」を表示していたため、逆に見えていた
   - 修正後：ボタンは常に現在アクティブな表示モードを示すようになった
-- **ハイライトスタイル設定を追加**（issue [#28](https://github.com/mofukuru/SideNote/issues)）
+- **ハイライトスタイル設定を追加**（issue [#28](https://github.com/mofukuru/side-note/issues)）
   - 設定 → Side Note に新しい **Highlight style** ドロップダウンを追加。5種類から選択可能：
     - *Underline + Background*（デフォルト — 従来通り）
     - *Background only*（背景色のみ）
@@ -284,55 +284,55 @@ Side Note パネル上部の検索欄にキーワードを入力すると、コ�
   - ノートコメント・テキスト選択コメントのどちらでも動作
   - `Ctrl/Cmd+Enter` で保存（グローバルホットキーとの競合を避けるため Obsidian の `Scope` システムを経由）、`Esc` でキャンセル
   - バックグラウンドイベント（ファイル保存など）でサイドバーが再描画されても入力中のドラフトが保持される
-- **コメント内の外部URLおよびObsidianプロトコルリンクが正しく開かない問題を修正**（issue [#25](https://github.com/mofukuru/SideNote/issues)）
+- **コメント内の外部URLおよびObsidianプロトコルリンクが正しく開かない問題を修正**（issue [#25](https://github.com/mofukuru/side-note/issues)）
   - `https://`・`http://`・`obsidian://` などで始まるリンクがエラーになる代わりに、システムブラウザ/アプリで正しく開くように修正
   - 従来はすべての href を内部リンク専用の `openLinkText` に渡していたことが原因
-- **コメント内のwikiリンクをCtrl/Cmd+Clickで新しいタブに開く機能を追加**（issue [#24](https://github.com/mofukuru/SideNote/issues)）
+- **コメント内のwikiリンクをCtrl/Cmd+Clickで新しいタブに開く機能を追加**（issue [#24](https://github.com/mofukuru/side-note/issues)）
   - Ctrl（Windows/Linux）または Cmd（Mac）を押しながらコメント内の `[[WikiLink]]` をクリックすると、現在のタブを置き換えず新しいタブでノートを開きます
-- **OT mapPos バイアスのバグを修正 — ハイライト境界での編集でオーファン化しなくなった**（issue [#26](https://github.com/mofukuru/SideNote/issues)）
+- **OT mapPos バイアスのバグを修正 — ハイライト境界での編集でオーファン化しなくなった**（issue [#26](https://github.com/mofukuru/side-note/issues)）
   - `ChangeSet.mapPos()` の `assoc` 引数が逆になっており、`from` に `-1`（左バイアス）、`to` に `+1`（右バイアス）を使用していた
   - これによりハイライトの開始または終了位置への挿入が追跡範囲を拡大させ、テキスト検証が失敗して即座にオーファン化する問題が発生していた
   - `from` を `assoc=+1`、`to` を `assoc=-1` に修正し、境界への挿入が範囲外に留まるよう修正
-- **オーファン化された（赤い）ハイライトも OT で追従するように改善**（issue [#26](https://github.com/mofukuru/SideNote/issues)）
+- **オーファン化された（赤い）ハイライトも OT で追従するように改善**（issue [#26](https://github.com/mofukuru/side-note/issues)）
   - 従来、赤いドットはオーファン化した瞬間の位置に凍結され、その後の編集でもずれたまま表示されていた
   - 新しい `orphanedAt` トラッカーがオーファン位置に対しても `ChangeSet.mapPos()` を適用し続けるため、赤いドットが正しい位置を追う
   - Undo 回復はリアルタイムで動作: 追跡位置に元のテキストが再出現するとファイル保存を待たずに即座に黄色に戻る
-- **セッション横断的な精度向上のため絶対オフセットを保存**（issue [#26](https://github.com/mofukuru/SideNote/issues)）
+- **セッション横断的な精度向上のため絶対オフセットを保存**（issue [#26](https://github.com/mofukuru/side-note/issues)）
   - 新しい `startOffset`/`endOffset` フィールドを `data.json` に保存し、OT トラッカーが変更ごとに更新
   - Obsidian 再起動時は保存済みオフセットを先に検証し、古い場合のみ再検索を実行
 - **外部同期の再検索ウィンドウを ±10 行から ±50 行に拡大**
   - 他のデバイスでノートを編集してコメント対象テキストが大きく移動した場合の復元精度が向上
 
 ### 1.0.6
-- **コメント内の `[[WikiLink]]` 内部リンクが動作しない問題を修正**（issue [#11](https://github.com/mofukuru/SideNote/issues)）
+- **コメント内の `[[WikiLink]]` 内部リンクが動作しない問題を修正**（issue [#11](https://github.com/mofukuru/side-note/issues)）
   - コメントテキスト内のリンクが正しくリンク先ノートを開くように修正
   - カスタムサイドバービューでは Obsidian のワークスペースレベルのリンクハンドラが有効にならないため、明示的な `openLinkText` ハンドラを追加
   - リンクのクリックが「エディタの該当箇所へジャンプ」動作と干渉しなくなった
-- **サイドバーに検索フィルターを追加**（issue [#20](https://github.com/mofukuru/SideNote/issues)）
+- **サイドバーに検索フィルターを追加**（issue [#20](https://github.com/mofukuru/side-note/issues)）
   - Side Note パネル上部に検索入力欄を追加
   - ハイライトテキスト・コメント本文をリアルタイムで絞り込み
   - Current File・All Notes の両モードで動作
   - 日本語・中国語・韓国語などの IME 入力に対応し、変換中に絞り込みが割り込まない
-- **ダブルクリックで編集**（issue [#19](https://github.com/mofukuru/SideNote/issues)）
+- **ダブルクリックで編集**（issue [#19](https://github.com/mofukuru/side-note/issues)）
   - サイドバーのコメントをダブルクリックすると直接編集モーダルが開く。シングルクリックはエディタ位置へのジャンプのまま
-- **ハイライト追跡を再設計**（issue [#23](https://github.com/mofukuru/SideNote/issues)）
+- **ハイライト追跡を再設計**（issue [#23](https://github.com/mofukuru/side-note/issues)）
   - テキスト検索ベースの位置管理を CodeMirror 6 の `ChangeSet.mapPos()` を使った Operational Transformation（OT）に置き換え
   - ハイライトが同一文字列の別の出現箇所にドリフトすることなく編集に追従するようになった
   - コメント対象テキストを削除すると即座にオーファン化（赤いマーカー表示）され、別の箇所にハイライトが移らなくなった
   - ハイライトドリフトの根本原因だったドキュメント全体ハッシュ検索（`findTextByHashOptimized`）を削除。Obsidian 外で編集されたファイル向けに ±10 行近接検索を残した
   - Undo（Ctrl+Z）でファイル保存時にコメントが自動的に復帰する
-- **セキュリティ強化**（issue [#21](https://github.com/mofukuru/SideNote/issues)）
+- **セキュリティ強化**（issue [#21](https://github.com/mofukuru/side-note/issues)）
   - `normalizeCommentsFolderPath()` を追加: 絶対パスおよび `..` を含むパスを拒否し、デフォルトフォルダへフォールバック
   - Markdown ブロック解析の多行正規表現（`[^]*?`）を `indexOf` ベースの決定論的な処理に置き換え
   - イベントリスナーリークを修正: バインドしたクリックハンドラをクラスプロパティに保存し、`destroy` 時に正しく削除されるよう修正
 
 ### 1.0.5
-- **コメントが重複して作成される問題を修正**（issue [#16](https://github.com/mofukuru/SideNote/issues/16), [#18](https://github.com/mofukuru/SideNote/issues/18), [#10](https://github.com/mofukuru/SideNote/issues/10)）
+- **コメントが重複して作成される問題を修正**（issue [#16](https://github.com/mofukuru/side-note/issues/16), [#18](https://github.com/mofukuru/side-note/issues/18), [#10](https://github.com/mofukuru/side-note/issues/10)）
   - クリック/タッチイベントの二重実行を防ぐため、モーダルのsubmit処理を強化
   - 連続送信をブロックするsubmit再入防止ガードとデバウンスを追加
   - コメントの識別子をtimestampから安定したUUID（`id`）に移行し、正確なターゲット指定を実現
   - マークダウンマーカーをid形式に変更し、レガシーtimestamp形式へのフォールバックを維持
-- **オーファン化されたコメントが復帰しない問題を修正**（issue [#15](https://github.com/mofukuru/SideNote/issues/15)）
+- **オーファン化されたコメントが復帰しない問題を修正**（issue [#15](https://github.com/mofukuru/side-note/issues/15)）
   - オーファン化されたコメントもファイル更新のたびに再検索され、テキストが見つかれば自動的に復帰するように改善
 - **「View all comments」コマンドを追加**
   - コマンドパレットから全ノートのコメントをファイルごとにまとめて表示できる新コマンドを追加
